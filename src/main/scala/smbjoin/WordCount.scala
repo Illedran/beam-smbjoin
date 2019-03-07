@@ -1,4 +1,4 @@
-package example
+package smbjoin
 
 import com.spotify.scio._
 
@@ -7,7 +7,7 @@ sbt "runMain [PACKAGE].WordCount
   --project=[PROJECT] --runner=DataflowRunner --zone=[ZONE]
   --input=gs://dataflow-samples/shakespeare/kinglear.txt
   --output=gs://[BUCKET]/[PATH]/wordcount"
-*/
+ */
 
 object WordCount {
   def main(cmdlineArgs: Array[String]): Unit = {

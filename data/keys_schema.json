@@ -1,0 +1,11 @@
+{"namespace": "smbjoin",
+ "type": "record",
+ "name": "keyMapping",
+ "fields": [
+     {
+         "name": "id",
+         "type": "string"
+    },
+     {"name": "key", "type": "string"}
+ ]
+}
