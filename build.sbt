@@ -38,7 +38,7 @@ lazy val root: Project = project
         "com.spotify" %% "scio-avro" % scioVersion,
         "org.apache.beam" % "beam-runners-direct-java" % beamVersion,
         //      "org.apache.beam" % "beam-sdks-java-extensions-sorter" % beamVersion,
-        //      "org.apache.beam" % "beam-sdks-java-extensions-sketching" % beamVersion,
+              "org.apache.beam" % "beam-sdks-java-extensions-sketching" % beamVersion,
         // optional dataflow runner
         // "org.apache.beam" % "beam-runners-google-cloud-dataflow-java" % beamVersion,
         "org.slf4j" % "slf4j-simple" % "1.7.26"

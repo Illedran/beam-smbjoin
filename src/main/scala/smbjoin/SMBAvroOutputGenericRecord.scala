@@ -23,7 +23,7 @@ case class SMBAvroOutputGenericRecord(schema: Supplier[Schema],
   val tapT = EmptyTapOf[SMBucket[GenericRecord]]
 
   val compressionLevel: Int = 6
-  val shardTemplate = "bucket-SSSSS-of-NNNNN"
+  val shardTemplate = "bucket-SSSS-of-NNNN"
   val suffix = ".avro"
 
   override def tap(params: Nothing): Nothing = ???
@@ -42,12 +42,14 @@ case class SMBAvroOutputGenericRecord(schema: Supplier[Schema],
     //        GenericDatumWriterSupplier,
     //        SerializableSchema.of(schema))
     data.map { bucket =>
+
+      val shardSuffix = f"-s${bucket.shardId}%04d$suffix"
       val resourceId = DefaultFilenamePolicy
         .fromParams(
           new DefaultFilenamePolicy.Params()
             .withBaseFilename(FileSystems.matchNewResource(outputPath, true))
             .withShardTemplate(shardTemplate)
-            .withSuffix(suffix)
+            .withSuffix(shardSuffix)
         )
         .unwindowedFilename(
           bucket.bucketId,
@@ -56,11 +58,12 @@ case class SMBAvroOutputGenericRecord(schema: Supplier[Schema],
         )
 
       println(s"Writing $resourceId")
-
       val channel = FileSystems.create(resourceId, MimeTypes.BINARY)
       val dataFileWriter =
         new DataFileWriter[GenericRecord](new GenericDatumWriter())
           .setCodec(CodecFactory.deflateCodec(compressionLevel))
+          .setMeta("smbjoin.bucketId", bucket.bucketId)
+          .setMeta("smbjoin.shardId", bucket.shardId)
           .create(schema.get, Channels.newOutputStream(channel))
 
       bucket.values.foreach(dataFileWriter.append)

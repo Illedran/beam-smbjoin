@@ -9,6 +9,7 @@ import org.apache.avro.Schema
 import org.apache.avro.file.DataFileStream
 import org.apache.avro.generic.{GenericDatumReader, GenericRecord}
 import org.apache.beam.sdk.io.FileSystems
+import org.apache.beam.sdk.io.fs.ResourceId
 import org.apache.beam.sdk.transforms.Reshuffle
 
 import scala.collection.JavaConverters._
@@ -24,6 +25,7 @@ object SMBScioContext {
 
 case class SMBScioContext(@transient self: ScioContext) {
 
+  // scalastyle:off
   def smbReader(
     leftSpec: String,
     rightSpec: String,
@@ -36,25 +38,20 @@ case class SMBScioContext(@transient self: ScioContext) {
       .metadata
       .asScala
       .map(_.resourceId)
-      .sortBy(_.getFilename)
+
     val right = FileSystems
       .`match`(rightSpec)
       .metadata
       .asScala
       .map(_.resourceId)
-      .sortBy(_.getFilename)
-
-    if (left.size != right.size) {
-      throw new RuntimeException(
-        "Left/right should have same number of buckets"
-      )
-    }
 
     val leftSchemaSupplier = SerializableSchema.of(leftSchema)
     val rightSchemaSupplier = SerializableSchema.of(rightSchema)
 
+    val resolvedBucketSpec =
+      resolveBucketSpec(left, right, leftSchema, rightSchema)
     self
-      .parallelize(left zip right)
+      .parallelize(resolvedBucketSpec)
       .applyTransform(Reshuffle.viaRandomKey()) //TODO: is this needed?
       .flatMap {
         case (leftFile, rightFile) =>
@@ -81,4 +78,63 @@ case class SMBScioContext(@transient self: ScioContext) {
           )
       }
   }
+
+  def resolveBucketSpec(
+    left: Iterable[ResourceId],
+    right: Iterable[ResourceId],
+    leftSchema: Schema,
+    rightSchema: Schema
+  ): Iterable[(ResourceId, ResourceId)] = {
+    println("Resolving bucket spec")
+    val leftWithBucketId = left
+      .map { fileName =>
+        val (bucketId, shardId) = getBucketingMetadata(fileName, leftSchema)
+        (bucketId, fileName)
+      }
+
+    val rightWithBucketId = right
+      .map { fileName =>
+        val (bucketId, shardId) = getBucketingMetadata(fileName, rightSchema)
+        (bucketId, fileName)
+      }
+
+    val leftBucketIds = leftWithBucketId.map { _._1 }.toSeq.sorted
+    val rightBucketIds = rightWithBucketId.map { _._1 }.toSeq.sorted
+
+
+    if (leftBucketIds.last != rightBucketIds.last ||
+        (0L to leftBucketIds.last) != leftBucketIds.distinct ||
+        (0L to rightBucketIds.last) != rightBucketIds.distinct) {
+      throw new RuntimeException(
+        "Left/right should have same number of buckets"
+      )
+    } else {
+      println(s"Found ${leftBucketIds.last + 1} buckets across (${leftBucketIds.size}, ${rightBucketIds.size}) shards")
+    }
+
+    for (leftIt <- leftWithBucketId;
+         rightIt <- rightWithBucketId
+         if leftIt._1 == rightIt._1) yield {
+      (leftIt._2, rightIt._2)
+    }
+  }
+
+  def getBucketingMetadata(resourceId: ResourceId,
+                           schema: Schema): (Long, Long) = {
+    checkNotNull(resourceId)
+    val channel = FileSystems.open(resourceId)
+
+    val inputStream = Channels.newInputStream(channel)
+    val stream = new DataFileStream(
+      inputStream,
+      new GenericDatumReader[GenericRecord](schema)
+    )
+    val bucketId = stream.getMetaLong("smbjoin.bucketId")
+    val shardId = stream.getMetaLong("smbjoin.shardId")
+    stream.close()
+    inputStream.close()
+    channel.close()
+    (bucketId, shardId)
+  }
+  //scalastyle:on
 }
