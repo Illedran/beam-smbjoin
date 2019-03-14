@@ -15,7 +15,7 @@ object SerializableSchema {
 }
 
 private class StringToSchema
-    extends Function[String, Schema]
+  extends Function[String, Schema]
     with Serializable {
   override def apply(input: String): Schema = new Schema.Parser().parse(input)
 }

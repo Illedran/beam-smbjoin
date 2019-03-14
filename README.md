@@ -1,8 +1,8 @@
-# smb-scio-test
+# scio-smbjoin
 
 ## Raison d'être:
 
-TODO: your project description
+Scio-SMBjoin. An implementation of SMB join using Scio.
 
 ## Features:
 
@@ -20,7 +20,7 @@ To build package run:
 ```
 sbt pack
 ```
-
+<!---
 ### Testing
 
 This template comes with an example of a test, to run tests:
@@ -28,6 +28,7 @@ This template comes with an example of a test, to run tests:
 ```
 sbt test
 ```
+--->
 
 ### Scala style
 

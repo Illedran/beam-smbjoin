@@ -2,7 +2,7 @@ package smbjoin
 
 import com.spotify.scio.io.Tap
 import com.spotify.scio.values.SCollection
-import com.twitter.algebird.CMSHasher
+import com.twitter.algebird.{CMSHasher, _}
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 
@@ -13,21 +13,22 @@ object MySCollectionFunctions {
   import scala.language.implicitConversions
 
   implicit def toGenericAvroSCollection(
-    c: SCollection[GenericRecord]
-  ): GenericAvroSCollection =
+                                         c: SCollection[GenericRecord]
+                                       ): GenericAvroSCollection =
     new GenericAvroSCollection(c)
 
 }
 
 class GenericAvroSCollection(@transient val self: SCollection[GenericRecord])
-    extends Serializable {
+  extends Serializable {
+
 
   def saveAsAvroBucketedFile(
-    path: String,
-    numBuckets: Int,
-    schema: Schema,
-    bucketer: GenericRecord => Int
-  )(implicit ord: Ordering[GenericRecord]): Future[Tap[Nothing]] = {
+                              path: String,
+                              numBuckets: Int,
+                              schema: Schema,
+                              bucketer: GenericRecord => Int
+                            )(implicit ord: Ordering[GenericRecord]): Future[Tap[Nothing]] = {
     self
       .map { v =>
         (Math.floorMod(bucketer(v), numBuckets), v)
@@ -47,17 +48,14 @@ class GenericAvroSCollection(@transient val self: SCollection[GenericRecord])
   }
 
   def saveAsAvroBucketedFileSkewed(
-    path: String,
-    numBuckets: Int,
-    schema: Schema,
-    bucketer: GenericRecord => Int
-  )(implicit ord: Ordering[GenericRecord], hasher: CMSHasher[Int]): Unit = {
-    import com.twitter.algebird._
-
-    // TODO: might be better to use SparseCMS
-    val eps: Double = 0.001
+                                    path: String,
+                                    numBuckets: Int,
+                                    schema: Schema,
+                                    bucketer: GenericRecord => Int
+                                  )(implicit ord: Ordering[GenericRecord], hasher: CMSHasher[Int]): Unit = {
+    val eps: Double = 1.0 / numBuckets // ??
     val seed: Int = 42
-    val delta: Double = 1E-10
+    val delta: Double = 0.01
 
     val keyAggregator = CMS.aggregator[Int](eps, delta, seed)
 
@@ -65,12 +63,13 @@ class GenericAvroSCollection(@transient val self: SCollection[GenericRecord])
       .map { v => Math.floorMod(bucketer(v), numBuckets) }
       .aggregate(keyAggregator)
       .flatMap { cms =>
-        (0 to numBuckets).map { i =>
-          val numShards: Int =
-            (numBuckets.toFloat * cms.frequency(i).estimate / cms.totalCount).ceil.toInt
+        (0 until numBuckets).map { i =>
+          val freq: Double = 1.0 * cms.frequency(i).estimate / cms.totalCount
+          val numShards: Int = ((freq * (numBuckets - 1)) / (1.0 - freq)).ceil.toInt
           (i, numShards)
         }
       }
+
       .asMapSideInput
 
     self

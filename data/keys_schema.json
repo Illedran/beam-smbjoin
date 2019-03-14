@@ -1,12 +1,15 @@
 {
-  "type" : "record",
-  "name" : "KeyMapping",
-  "namespace" : "smbjoin",
-  "fields" : [ {
-    "name" : "id",
-    "type" : "string"
-  }, {
-    "name" : "key",
-    "type" : "string"
-  } ]
+  "type": "record",
+  "name": "KeyMapping",
+  "namespace": "smbjoin",
+  "fields": [
+    {
+      "name": "id",
+      "type": "string"
+    },
+    {
+      "name": "key",
+      "type": "string"
+    }
+  ]
 }

@@ -17,7 +17,7 @@ import scala.concurrent.Future
 case class SMBAvroOutputGenericRecord(schema: Supplier[Schema],
                                       numBuckets: Int,
                                       outputPath: String)
-    extends ScioIO[SMBucket[GenericRecord]] {
+  extends ScioIO[SMBucket[GenericRecord]] {
   override type ReadP = Nothing
   override type WriteP = Unit
   val tapT = EmptyTapOf[SMBucket[GenericRecord]]
@@ -29,9 +29,9 @@ case class SMBAvroOutputGenericRecord(schema: Supplier[Schema],
   override def tap(params: Nothing): Nothing = ???
 
   override protected def read(
-    sc: ScioContext,
-    params: Nothing
-  ): SCollection[SMBucket[GenericRecord]] = ???
+                               sc: ScioContext,
+                               params: Nothing
+                             ): SCollection[SMBucket[GenericRecord]] = ???
 
   override protected def write(data: SCollection[SMBucket[GenericRecord]],
                                params: Unit): Future[Tap[tapT.T]] = {
