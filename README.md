@@ -3,6 +3,7 @@
 ## Raison d'être:
 
 Scio-SMBjoin. An implementation of SMB join using Scio.
+Work done at Spotify for my thesis at KTH.
 
 ## Features:
 
