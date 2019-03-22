@@ -5,6 +5,13 @@
 Scio-SMBjoin. An implementation of SMB join using Scio.
 Work done at Spotify for my thesis at KTH.
 
+## How-to:
+
+1) Generate events with `python3 scripts/gen_events.py`. See `gen_events.py --help` for more info.
+2) Create bucketed events with (e.g.) `SMBMakeBucketsJob`.
+3) Repeat for keys.
+4) Join with `SMBJoinJob`.
+
 ## Features:
 
 This project comes with number of preconfigured features, including:
