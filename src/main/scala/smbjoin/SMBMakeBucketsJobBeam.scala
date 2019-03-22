@@ -12,14 +12,14 @@ import org.apache.beam.sdk.options.PipelineOptionsFactory
 import smbjoin.MySCollectionFunctions._
 
 /* Example:
-sbt "runMain smbjoin.SMBMakeBucketsJob
+sbt "runMain smbjoin.SMBMakeBucketsJobBeam
   --input=data/events-1000000-0.avro
   --avroSchema=schema/empty_event.avro
   --output=bucketed/events-100000-0
   --numBuckets=20
  */
 
-object SMBMakeBucketsJob {
+object SMBMakeBucketsJobBeam {
   def main(cmdlineArgs: Array[String]): Unit = {
     val (sc, args) = ContextAndArgs(cmdlineArgs)
 
@@ -42,7 +42,7 @@ object SMBMakeBucketsJob {
       Coder.avroGenericRecordCoder(schema)
 
     sc.avroFile[GenericRecord](input, schema = schema)
-      .saveAsAvroBucketedFile(
+      .saveAsAvroBucketedFileBeam(
         output,
         numBuckets,
         schema,

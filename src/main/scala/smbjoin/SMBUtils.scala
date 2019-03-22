@@ -32,10 +32,10 @@ object SMBUtils {
 
     while (leftIt.hasNext || rightIt.hasNext) {
       (leftIt.hasNext, rightIt.hasNext) match {
-        case (true, false) =>
+        case (true, false) => // Left outer join
           val (leftKey, leftGroup) = consumeGroup(leftIt)
           buffer += ((leftKey, leftGroup, Iterable.empty))
-        case (false, true) =>
+        case (false, true) => // Right outer join
           val (rightKey, rightGroup) = consumeGroup(rightIt)
           buffer += ((rightKey, Iterable.empty, rightGroup))
         case (true, true) =>
