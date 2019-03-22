@@ -1,6 +1,6 @@
 {
   "type": "record",
-  "name": "Event",
+  "name": "Key",
   "namespace": "smbjoin",
   "fields": [
     {
@@ -8,8 +8,8 @@
       "type": "string"
     },
     {
-      "name": "value",
-      "type": "double"
+      "name": "key",
+      "type": "string"
     }
   ]
 }

@@ -32,12 +32,11 @@ def main():
                         help="Number of records to generate.", required=True)
     parser.add_argument('-k', '--key-size', metavar='K', type=int,
                         help="Default length of key.", required=True)
+    parser.add_argument('--schema-file', metavar='path', type=str, required=True,
+                        help="Path to schema file.")
     parser.add_argument('-f', '--skewed-fraction', metavar='F', type=float,
                         help="Default fraction of skewed keys. (default: %(default)s)",
                         default=0.0)
-    parser.add_argument('--schema-file', metavar='path', type=str,
-                        help="Path to schema file. (default: %(default)s)",
-                        default="events_schema.json")
     parser.add_argument('--dir', metavar='dir_path', type=str,
                         help="Save file to a directory. (default: %(default)s)",
                         default='.')
