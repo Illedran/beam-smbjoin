@@ -7,10 +7,10 @@ import com.spotify.scio.avro._
 import com.spotify.scio.coders.Coder
 import org.apache.avro.file.DataFileStream
 import org.apache.avro.generic.{GenericDatumReader, GenericRecord}
+import org.apache.avro.Schema
 import org.apache.beam.sdk.io.FileSystems
 import org.apache.beam.sdk.options.PipelineOptionsFactory
 import smbjoin.MySCollectionFunctions._
-import org.apache.avro.Schema
 
 /* Example:
 sbt "runMain smbjoin.SMBMakeBucketsJobBeam
@@ -36,10 +36,10 @@ object SMBMakeBucketsJob {
 
     FileSystems.setDefaultPipelineOptions(PipelineOptionsFactory.create)
     val schema: Schema = if (schemaFilePath.isDefined) {
-      import org.apache.avro.Schema
       val schemaResource =
         FileSystems.matchNewResource(schemaFilePath.get, false)
-      new Schema.Parser().parse(Channels.newInputStream(FileSystems.open(schemaResource)))
+      new Schema.Parser()
+        .parse(Channels.newInputStream(FileSystems.open(schemaResource)))
     } else {
       val schemaResource =
         FileSystems.matchNewResource(avroSchemaPath.get, false)
@@ -56,11 +56,11 @@ object SMBMakeBucketsJob {
       Coder.avroGenericRecordCoder(schema)
 
     sc.avroFile[GenericRecord](input, schema = schema)
-      .saveAsAvroBucketedFile(
+      .saveAsBucketedAvroFile(
         output,
         numBuckets,
         schema,
-        bucketer = SMBUtils.bucketer
+        joinKey = SMBUtils.joinKey
       )
 
     val result = sc.close().waitUntilFinish()

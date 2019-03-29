@@ -6,22 +6,22 @@ import scala.collection.mutable
 import scala.util.hashing.MurmurHash3
 
 object SMBUtils {
-  val ordering: Ordering[GenericRecord] = Ordering.by(bucketKey)
+  val ordering: Ordering[GenericRecord] = Ordering.by(joinKey)
 
   def bucketer(record: GenericRecord): Int =
-    MurmurHash3.stringHash(bucketKey(record))
+    MurmurHash3.stringHash(joinKey(record))
 
   def smbJoin(
-               leftIt: BufferedIterator[GenericRecord],
-               rightIt: BufferedIterator[GenericRecord]
-             ): Iterable[(String, Iterable[GenericRecord], Iterable[GenericRecord])] = {
+    leftIt: BufferedIterator[GenericRecord],
+    rightIt: BufferedIterator[GenericRecord]
+  ): Iterable[(String, Iterable[GenericRecord], Iterable[GenericRecord])] = {
 
     def consumeGroup(
-                      bIt: BufferedIterator[GenericRecord]
-                    ): (String, Iterable[GenericRecord]) = {
+      bIt: BufferedIterator[GenericRecord]
+    ): (String, Iterable[GenericRecord]) = {
       val buffer = mutable.ListBuffer.newBuilder[GenericRecord]
-      val groupKey = SMBUtils.bucketKey(bIt.head)
-      while (bIt.hasNext && SMBUtils.bucketKey(bIt.head) == groupKey) {
+      val groupKey = SMBUtils.joinKey(bIt.head)
+      while (bIt.hasNext && SMBUtils.joinKey(bIt.head) == groupKey) {
         buffer += bIt.next
       }
       (groupKey, buffer.result)
@@ -39,9 +39,7 @@ object SMBUtils {
           val (rightKey, rightGroup) = consumeGroup(rightIt)
           buffer += ((rightKey, Iterable.empty, rightGroup))
         case (true, true) =>
-          (SMBUtils.bucketKey(leftIt.head) compare SMBUtils.bucketKey(
-            rightIt.head
-          )).signum match {
+          (SMBUtils.joinKey(leftIt.head) compare SMBUtils.joinKey(rightIt.head)).signum match {
             case -1 =>
               val (leftKey, leftGroup) = consumeGroup(leftIt)
               buffer += ((leftKey, leftGroup, Iterable.empty))
@@ -58,6 +56,6 @@ object SMBUtils {
     buffer.result
   }
 
-  def bucketKey(record: GenericRecord): String = record.get("id").toString
+  def joinKey(record: GenericRecord): String = record.get("id").toString
 
 }

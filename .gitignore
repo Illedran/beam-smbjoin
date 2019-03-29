@@ -5,6 +5,7 @@ bucketed/
 joined/
 *.crc
 *.avro
+src/main/generated/
 
 # Created by https://www.gitignore.io/api/vim,git,sbt,java,maven,macos,linux,emacs,scala,windows,intellij+all,visualstudiocode
 # Edit at https://www.gitignore.io/?templates=vim,git,sbt,java,maven,macos,linux,emacs,scala,windows,intellij+all,visualstudiocode

@@ -4,13 +4,17 @@ import java.nio.channels.Channels
 
 import com.spotify.scio._
 import com.spotify.scio.avro._
-import com.spotify.scio.coders.Coder
+import com.spotify.scio.coders.{Coder, CoderMaterializer}
 import org.apache.avro.file.DataFileStream
 import org.apache.avro.generic.{GenericDatumReader, GenericRecord}
 import org.apache.avro.Schema
+import org.apache.beam.sdk
+import org.apache.beam.sdk.coders.StringUtf8Coder
 import org.apache.beam.sdk.io.FileSystems
 import org.apache.beam.sdk.options.PipelineOptionsFactory
 import smbjoin.MySCollectionFunctions._
+import smbjoin.beam.{SMBPartitioning, SMBAvroSink, SMBShuffle}
+import smbjoin.SerializableSchema._
 
 /* Example:
 sbt "runMain smbjoin.SMBMakeBucketsJobBeam
@@ -36,10 +40,10 @@ object SMBMakeBucketsJobBeam {
 
     FileSystems.setDefaultPipelineOptions(PipelineOptionsFactory.create)
     val schema: Schema = if (schemaFilePath.isDefined) {
-      import org.apache.avro.Schema
       val schemaResource =
         FileSystems.matchNewResource(schemaFilePath.get, false)
-      new Schema.Parser().parse(Channels.newInputStream(FileSystems.open(schemaResource)))
+      new Schema.Parser()
+        .parse(Channels.newInputStream(FileSystems.open(schemaResource)))
     } else {
       val schemaResource =
         FileSystems.matchNewResource(avroSchemaPath.get, false)
@@ -55,12 +59,24 @@ object SMBMakeBucketsJobBeam {
     implicit val coderGenericRecord: Coder[GenericRecord] =
       Coder.avroGenericRecordCoder(schema)
 
+    val partitioning = new SMBPartitioning[String, GenericRecord] {
+      override def getJoinKeyCoder: sdk.coders.Coder[String] =
+        StringUtf8Coder.of()
+
+      override def getJoinKey(value: GenericRecord): String =
+        value
+          .get("message")
+          .asInstanceOf[GenericRecord]
+          .get("user_id")
+//          .get("id")
+          .toString
+    }
+
     sc.avroFile[GenericRecord](input, schema = schema)
-      .saveAsAvroBucketedFileBeam(
-        output,
-        numBuckets,
-        schema,
-        bucketer = SMBUtils.bucketer
+      .internal
+      .apply(SMBShuffle.create(partitioning, numBuckets))
+      .apply(
+        SMBAvroSink.create(FileSystems.matchNewResource(output, true), schema)
       )
 
     val result = sc.close().waitUntilFinish()

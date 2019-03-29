@@ -3,16 +3,14 @@ package smbjoin
 import java.nio.channels.Channels
 
 import com.spotify.scio._
+import com.spotify.scio.avro._
 import com.spotify.scio.coders.Coder
 import org.apache.avro.generic.{GenericDatumReader, GenericRecord}
 import org.apache.avro.Schema
 import org.apache.avro.file.DataFileStream
-import org.apache.beam.sdk.{io => gio}
 import org.apache.beam.sdk.io.FileSystems
 import org.apache.beam.sdk.options.PipelineOptionsFactory
 import smbjoin.MySCollectionFunctions._
-import com.spotify.scio.avro._
-import scala.collection.JavaConverters._
 
 /* Example:
 sbt "runMain example.SMBMakeBucketsExample
@@ -21,7 +19,7 @@ sbt "runMain example.SMBMakeBucketsExample
   --numBuckets=40
  */
 
-object SMBMakeSkewedBucketsJob {
+object SMBCount {
   def main(cmdlineArgs: Array[String]): Unit = {
     val (sc, args) = ContextAndArgs(cmdlineArgs)
 
@@ -61,13 +59,12 @@ object SMBMakeSkewedBucketsJob {
 //    sc.parallelize(inputFiles)
 //      .applyTransform(gio.AvroIO.readAllGenericRecords(schema))
     sc.avroFile[GenericRecord](input, schema = schema)
-      .saveAsBucketedSkewedAvroFile(
-        output,
-        numBuckets,
-        schema,
-        eps = 0.01,
-        joinKey = SMBUtils.joinKey
-      )
+      .map(SMBUtils.bucketer)
+      .map({ k =>
+        Math.floorMod(k, numBuckets)
+      })
+      .countByValue
+      .saveAsTextFile(output, numShards = 1)
 
     sc.close().waitUntilFinish()
   }

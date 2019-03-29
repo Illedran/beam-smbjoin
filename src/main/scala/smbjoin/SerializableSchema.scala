@@ -1,21 +1,35 @@
 package smbjoin
 
-import java.io.Serializable
+import java.io.{
+  IOException,
+  ObjectInputStream,
+  ObjectOutputStream,
+  Serializable
+}
 
-import com.google.common.base.{Function, Supplier, Suppliers}
 import org.apache.avro.Schema
 
 object SerializableSchema {
-  def of(schema: Schema): Supplier[Schema] = {
-    val json = schema.toString
-    Suppliers.memoize(
-      Suppliers.compose(new StringToSchema, Suppliers.ofInstance(json))
-    )
-  }
+  import scala.language.implicitConversions
+
+  implicit def toSerializableSchema(schema: Schema): SerializableSchema =
+    new SerializableSchema(schema)
 }
 
-private class StringToSchema
-  extends Function[String, Schema]
-    with Serializable {
-  override def apply(input: String): Schema = new Schema.Parser().parse(input)
+@SuppressWarnings(Array("org.wartremover.warts.Var"))
+@SerialVersionUID(1L)
+class SerializableSchema(@transient var schema: Schema) extends Serializable {
+
+  @throws[IOException]
+  private def writeObject(out: ObjectOutputStream): Unit = {
+    out.writeObject(schema.toString)
+  }
+
+  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
+  @throws[IOException]
+  @throws[ClassNotFoundException]
+  private def readObject(in: ObjectInputStream): Unit = {
+    val strSchema = in.readObject.asInstanceOf[String]
+    this.schema = new Schema.Parser().parse(strSchema)
+  }
 }

@@ -12,7 +12,7 @@ class WordCountTest extends PipelineSpec {
     JobTest[smbjoin.WordCount.type]
       .args("--input=in.txt", "--output=out.txt")
       .input(TextIO("in.txt"), inData)
-      .output(TextIO("out.txt"))(_ should containInAnyOrder (expected))
+      .output(TextIO("out.txt"))(_ should containInAnyOrder(expected))
       .run()
   }
 

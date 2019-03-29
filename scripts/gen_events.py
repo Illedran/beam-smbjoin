@@ -13,7 +13,7 @@ def generator(c, k, fraction):
             id_val = skewed_id_val
         else:
             id_val = random.getrandbits(4 * k)
-        yield b'{"id":"%x","value":%f}' % (id_val, random.random())
+        yield b'{"id":"%0*x","value":%f}' % (k, id_val, random.random())
 
 
 def generate(c, k, fraction, schema_file, dir_path):
