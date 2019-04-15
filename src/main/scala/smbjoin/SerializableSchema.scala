@@ -1,15 +1,11 @@
 package smbjoin
 
-import java.io.{
-  IOException,
-  ObjectInputStream,
-  ObjectOutputStream,
-  Serializable
-}
+import java.io.{IOException, ObjectInputStream, ObjectOutputStream, Serializable}
 
 import org.apache.avro.Schema
 
 object SerializableSchema {
+
   import scala.language.implicitConversions
 
   implicit def toSerializableSchema(schema: Schema): SerializableSchema =

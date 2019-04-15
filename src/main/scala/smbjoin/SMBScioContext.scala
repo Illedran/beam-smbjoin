@@ -27,11 +27,11 @@ case class SMBScioContext(@transient self: ScioContext) {
 
   // scalastyle:off
   def smbReader(
-    leftSpec: String,
-    rightSpec: String,
-    leftSchema: Schema,
-    rightSchema: Schema
-  ): SCollection[(String, Iterable[GenericRecord], Iterable[GenericRecord])] = {
+                 leftSpec: String,
+                 rightSpec: String,
+                 leftSchema: Schema,
+                 rightSchema: Schema
+               ): SCollection[(String, Iterable[GenericRecord], Iterable[GenericRecord])] = {
 
     val left = FileSystems
       .`match`(leftSpec)
@@ -54,37 +54,37 @@ case class SMBScioContext(@transient self: ScioContext) {
       .parallelize(resolvedBucketSpec)
       .applyTransform(Reshuffle.viaRandomKey()) //TODO: is this needed?
       .flatMap {
-        case (leftFile, rightFile) =>
-          checkNotNull(leftFile)
-          checkNotNull(rightFile)
-          val leftChannel = FileSystems.open(leftFile)
+      case (leftFile, rightFile) =>
+        checkNotNull(leftFile)
+        checkNotNull(rightFile)
+        val leftChannel = FileSystems.open(leftFile)
 
-          val leftInputStream = Channels.newInputStream(leftChannel)
-          val leftStream = new DataFileStream(
-            leftInputStream,
-            new GenericDatumReader[GenericRecord](leftSchemaSupplier.schema)
-          )
+        val leftInputStream = Channels.newInputStream(leftChannel)
+        val leftStream = new DataFileStream(
+          leftInputStream,
+          new GenericDatumReader[GenericRecord](leftSchemaSupplier.schema)
+        )
 
-          val rightChannel = FileSystems.open(rightFile)
-          val rightInputStream = Channels.newInputStream(rightChannel)
-          val rightStream = new DataFileStream(
-            rightInputStream,
-            new GenericDatumReader[GenericRecord](rightSchemaSupplier.schema)
-          )
+        val rightChannel = FileSystems.open(rightFile)
+        val rightInputStream = Channels.newInputStream(rightChannel)
+        val rightStream = new DataFileStream(
+          rightInputStream,
+          new GenericDatumReader[GenericRecord](rightSchemaSupplier.schema)
+        )
 
-          SMBUtils.smbJoin(
-            leftStream.iterator.asScala.buffered,
-            rightStream.iterator.asScala.buffered
-          )
-      }
+        SMBUtils.smbJoin(
+          leftStream.iterator.asScala.buffered,
+          rightStream.iterator.asScala.buffered
+        )
+    }
   }
 
   def resolveBucketSpec(
-    left: Iterable[ResourceId],
-    right: Iterable[ResourceId],
-    leftSchema: Schema,
-    rightSchema: Schema
-  ): Iterable[(ResourceId, ResourceId)] = {
+                         left: Iterable[ResourceId],
+                         right: Iterable[ResourceId],
+                         leftSchema: Schema,
+                         rightSchema: Schema
+                       ): Iterable[(ResourceId, ResourceId)] = {
     println("Resolving bucket spec")
     val leftWithBucketId = left
       .map { fileName =>
@@ -112,8 +112,8 @@ case class SMBScioContext(@transient self: ScioContext) {
       .sorted
 
     if (leftBucketIds.last != rightBucketIds.last ||
-        (0L to leftBucketIds.last) != leftBucketIds.distinct ||
-        (0L to rightBucketIds.last) != rightBucketIds.distinct) {
+      (0L to leftBucketIds.last) != leftBucketIds.distinct ||
+      (0L to rightBucketIds.last) != rightBucketIds.distinct) {
       throw new RuntimeException(
         "Left/right should have same number of buckets"
       )

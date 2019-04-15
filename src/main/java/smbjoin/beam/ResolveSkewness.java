@@ -1,11 +1,17 @@
 package smbjoin.beam;
 
-import org.apache.beam.sdk.transforms.*;
+import java.util.ArrayList;
+import org.apache.beam.sdk.transforms.Count;
+import org.apache.beam.sdk.transforms.DoFn;
+import org.apache.beam.sdk.transforms.Flatten;
+import org.apache.beam.sdk.transforms.GroupByKey;
+import org.apache.beam.sdk.transforms.MapElements;
+import org.apache.beam.sdk.transforms.PTransform;
+import org.apache.beam.sdk.transforms.ParDo;
+import org.apache.beam.sdk.transforms.SimpleFunction;
 import org.apache.beam.sdk.values.KV;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PCollectionView;
-
-import java.util.ArrayList;
 
 public class ResolveSkewness
     extends PTransform<PCollection<Integer>, PCollection<KV<Integer, Integer>>> {

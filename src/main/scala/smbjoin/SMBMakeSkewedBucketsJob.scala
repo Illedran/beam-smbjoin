@@ -3,22 +3,21 @@ package smbjoin
 import java.nio.channels.Channels
 
 import com.spotify.scio._
+import com.spotify.scio.avro._
 import com.spotify.scio.coders.Coder
-import org.apache.avro.generic.{GenericDatumReader, GenericRecord}
 import org.apache.avro.Schema
 import org.apache.avro.file.DataFileStream
-import org.apache.beam.sdk.{io => gio}
+import org.apache.avro.generic.{GenericDatumReader, GenericRecord}
 import org.apache.beam.sdk.io.FileSystems
 import org.apache.beam.sdk.options.PipelineOptionsFactory
-import smbjoin.MySCollectionFunctions._
-import com.spotify.scio.avro._
-import scala.collection.JavaConverters._
+import smbjoin.BucketedSCollectionFunctions._
 
 /* Example:
-sbt "runMain example.SMBMakeBucketsExample
-  --input=data/
-  --output=gs://[BUCKET]/[PATH]/wordcount"
-  --numBuckets=40
+sbt "runMain smbjoin.SMBMakeBucketsJobBeam
+  --input=data/events-1000000-0.avro
+  --schemaFile=schema/Event.avsc
+  --output=bucketed/events-100000-0
+  --numBuckets=20
  */
 
 object SMBMakeSkewedBucketsJob {
@@ -27,9 +26,9 @@ object SMBMakeSkewedBucketsJob {
 
     val input = args("input")
     val output = args("output")
-    val numBuckets = args("numBuckets").toInt
     val avroSchemaPath = args.optional("avroSchema")
     val schemaFilePath = args.optional("schemaFile")
+    val skewnessEps = args("skewnessEps").toDouble
 
     if (avroSchemaPath.isEmpty && schemaFilePath.isEmpty) {
       sys.error("One of --avroSchema or --schemaFile is required.")
@@ -52,23 +51,14 @@ object SMBMakeSkewedBucketsJob {
       dataFileReader.getSchema
     }
 
-    implicit val ordering: Ordering[GenericRecord] = SMBUtils.ordering
     implicit val coderGenericRecord: Coder[GenericRecord] =
       Coder.avroGenericRecordCoder(schema)
 
-//    val inputFiles: Iterable[String] =
-//      FileSystems.`match`(input).metadata.asScala.map(_.resourceId.toString)
-//    sc.parallelize(inputFiles)
-//      .applyTransform(gio.AvroIO.readAllGenericRecords(schema))
-    sc.avroFile[GenericRecord](input, schema = schema)
-      .saveAsBucketedSkewedAvroFile(
-        output,
-        numBuckets,
-        schema,
-        eps = 0.01,
-        joinKey = SMBUtils.joinKey
-      )
+    val joinKey: GenericRecord => String = _.get("id").toString
 
-    sc.close().waitUntilFinish()
+    sc.avroFile[GenericRecord](input, schema = schema)
+      .saveAsBucketedAvroFileWithSkew(output, skewnessEps, schema, joinKey)
+
+    val result = sc.close().waitUntilFinish()
   }
 }

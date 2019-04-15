@@ -11,14 +11,16 @@ object SMBUtils {
   def bucketer(record: GenericRecord): Int =
     MurmurHash3.stringHash(joinKey(record))
 
+  def joinKey(record: GenericRecord): String = record.get("id").toString
+
   def smbJoin(
-    leftIt: BufferedIterator[GenericRecord],
-    rightIt: BufferedIterator[GenericRecord]
-  ): Iterable[(String, Iterable[GenericRecord], Iterable[GenericRecord])] = {
+               leftIt: BufferedIterator[GenericRecord],
+               rightIt: BufferedIterator[GenericRecord]
+             ): Iterable[(String, Iterable[GenericRecord], Iterable[GenericRecord])] = {
 
     def consumeGroup(
-      bIt: BufferedIterator[GenericRecord]
-    ): (String, Iterable[GenericRecord]) = {
+                      bIt: BufferedIterator[GenericRecord]
+                    ): (String, Iterable[GenericRecord]) = {
       val buffer = mutable.ListBuffer.newBuilder[GenericRecord]
       val groupKey = SMBUtils.joinKey(bIt.head)
       while (bIt.hasNext && SMBUtils.joinKey(bIt.head) == groupKey) {
@@ -55,7 +57,5 @@ object SMBUtils {
     }
     buffer.result
   }
-
-  def joinKey(record: GenericRecord): String = record.get("id").toString
 
 }

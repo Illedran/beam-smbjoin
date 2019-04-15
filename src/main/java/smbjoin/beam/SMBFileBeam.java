@@ -1,11 +1,14 @@
 package smbjoin.beam;
 
 import com.google.auto.value.AutoValue;
-import org.apache.beam.sdk.coders.*;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import org.apache.beam.sdk.coders.AtomicCoder;
+import org.apache.beam.sdk.coders.ByteArrayCoder;
+import org.apache.beam.sdk.coders.Coder;
+import org.apache.beam.sdk.coders.IterableCoder;
+import org.apache.beam.sdk.coders.VarIntCoder;
 
 @AutoValue
 public abstract class SMBFileBeam {

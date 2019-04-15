@@ -1,5 +1,8 @@
 package smbjoin.beam;
 
+import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.nio.channels.WritableByteChannel;
 import org.apache.avro.file.CodecFactory;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -8,26 +11,19 @@ import org.apache.beam.sdk.io.DefaultFilenamePolicy;
 import org.apache.beam.sdk.io.FileBasedSink;
 import org.apache.beam.sdk.io.FileSystems;
 import org.apache.beam.sdk.io.fs.ResourceId;
-import org.apache.beam.sdk.options.ValueProvider;
-import org.apache.beam.sdk.transforms.*;
-import org.apache.beam.sdk.util.MimeTypes;
+import org.apache.beam.sdk.transforms.DoFn;
+import org.apache.beam.sdk.transforms.PTransform;
+import org.apache.beam.sdk.transforms.ParDo;
 import org.apache.beam.sdk.values.PCollection;
-import org.apache.beam.sdk.values.PCollectionView;
 import org.apache.beam.sdk.values.PDone;
 import smbjoin.SerializableSchema;
-
-import java.nio.ByteBuffer;
-import java.nio.channels.Channels;
-import java.nio.channels.WritableByteChannel;
 
 public class SMBAvroSink extends PTransform<PCollection<SMBFileBeam>, PDone> {
 
   private ResourceId baseFile;
   private SerializableSchema serializableSchema;
 
-  private SMBAvroSink(
-      ResourceId baseFile,
-      SerializableSchema serializableSchema) {
+  private SMBAvroSink(ResourceId baseFile, SerializableSchema serializableSchema) {
     this.baseFile = baseFile;
     this.serializableSchema = serializableSchema;
   }
@@ -70,7 +66,6 @@ public class SMBAvroSink extends PTransform<PCollection<SMBFileBeam>, PDone> {
               .unwindowedFilename(0, 1, FileBasedSink.CompressionType.UNCOMPRESSED);
 
       WritableByteChannel channel = FileSystems.create(resourceId, "application/avro");
-
 
       try (DataFileWriter<GenericRecord> dataFileWriter =
           new DataFileWriter<GenericRecord>(new GenericDatumWriter<>())

@@ -5,12 +5,12 @@ import java.nio.channels.Channels
 import com.spotify.scio._
 import com.spotify.scio.avro._
 import com.spotify.scio.coders.Coder
+import org.apache.avro.Schema
 import org.apache.avro.file.DataFileStream
 import org.apache.avro.generic.{GenericDatumReader, GenericRecord}
-import org.apache.avro.Schema
 import org.apache.beam.sdk.io.FileSystems
 import org.apache.beam.sdk.options.PipelineOptionsFactory
-import smbjoin.MySCollectionFunctions._
+import smbjoin.BucketedSCollectionFunctions._
 
 /* Example:
 sbt "runMain smbjoin.SMBMakeBucketsJobBeam
@@ -51,17 +51,13 @@ object SMBMakeBucketsJob {
       dataFileReader.getSchema
     }
 
-    implicit val ordering: Ordering[GenericRecord] = SMBUtils.ordering
     implicit val coderGenericRecord: Coder[GenericRecord] =
       Coder.avroGenericRecordCoder(schema)
 
+    val joinKey: GenericRecord => String = _.get("id").toString
+
     sc.avroFile[GenericRecord](input, schema = schema)
-      .saveAsBucketedAvroFile(
-        output,
-        numBuckets,
-        schema,
-        joinKey = SMBUtils.joinKey
-      )
+      .saveAsBucketedAvroFile(output, numBuckets, schema, joinKey)
 
     val result = sc.close().waitUntilFinish()
   }
