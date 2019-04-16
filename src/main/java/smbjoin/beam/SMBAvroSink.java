@@ -54,7 +54,7 @@ public class SMBAvroSink extends PTransform<PCollection<SMBFileBeam>, PDone> {
       int bucketId = c.element().bucketId();
       int shardId = c.element().shardId();
 
-      String shardTemplate = String.format("bucket-b%05d-s%05d", bucketId, shardId);
+      String shardTemplate = String.format("part-b%05d-s%05d", bucketId, shardId);
       final String suffix = ".avro";
 
       ResourceId resourceId =
