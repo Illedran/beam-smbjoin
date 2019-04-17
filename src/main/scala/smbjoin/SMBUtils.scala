@@ -1,6 +1,13 @@
 package smbjoin
 
-import org.apache.avro.generic.GenericRecord
+import java.nio.channels.Channels
+
+import com.google.common.base.Preconditions.checkNotNull
+import org.apache.avro.Schema
+import org.apache.avro.file.DataFileStream
+import org.apache.avro.generic.{GenericDatumReader, GenericRecord}
+import org.apache.beam.sdk.io.FileSystems
+import org.apache.beam.sdk.io.fs.ResourceId
 
 import scala.collection.mutable
 import scala.util.hashing.MurmurHash3
@@ -8,8 +15,6 @@ import scala.util.hashing.MurmurHash3
 object SMBUtils {
   val ordering: Ordering[GenericRecord] = Ordering.by(joinKey)
 
-  def bucketer(record: GenericRecord): Int =
-    MurmurHash3.stringHash(joinKey(record))
 
   def joinKey(record: GenericRecord): String = record.get("id").toString
 
@@ -20,7 +25,7 @@ object SMBUtils {
 
     def consumeGroup(
                       bIt: BufferedIterator[GenericRecord]
-                    ): (String, Iterable[GenericRecord]) = {
+                    ) = {
       val buffer = mutable.ListBuffer.newBuilder[GenericRecord]
       val groupKey = SMBUtils.joinKey(bIt.head)
       while (bIt.hasNext && SMBUtils.joinKey(bIt.head) == groupKey) {

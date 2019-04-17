@@ -18,7 +18,7 @@ import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PDone;
 import smbjoin.SerializableSchema;
 
-public class SMBAvroSink extends PTransform<PCollection<SMBFileBeam>, PDone> {
+public class SMBAvroSink extends PTransform<PCollection<SMBFile>, PDone> {
 
   private ResourceId baseFile;
   private SerializableSchema serializableSchema;
@@ -33,13 +33,13 @@ public class SMBAvroSink extends PTransform<PCollection<SMBFileBeam>, PDone> {
   }
 
   @Override
-  public PDone expand(final PCollection<SMBFileBeam> input) {
+  public PDone expand(final PCollection<SMBFile> input) {
 
     input.apply(ParDo.of(new WriteFn(baseFile, serializableSchema)));
     return PDone.in(input.getPipeline());
   }
 
-  private class WriteFn extends DoFn<SMBFileBeam, Void> {
+  private class WriteFn extends DoFn<SMBFile, Void> {
     private final ResourceId baseFile;
     private final SerializableSchema serializableSchema;
 

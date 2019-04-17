@@ -23,7 +23,7 @@ import org.apache.beam.sdk.values.TupleTag;
 import org.apache.beam.sdk.values.TupleTagList;
 
 public class SMBAutoShuffle<JoinKeyT, ValueT>
-    extends PTransform<PCollection<ValueT>, PCollection<SMBFileBeam>> {
+    extends PTransform<PCollection<ValueT>, PCollection<SMBFile>> {
 
   private final int BUCKET_SIZE_MB = 256;
   private SMBPartitioning<JoinKeyT, ValueT> SMBPartitioning;
@@ -45,7 +45,7 @@ public class SMBAutoShuffle<JoinKeyT, ValueT>
   }
 
   @Override
-  public PCollection<SMBFileBeam> expand(PCollection<ValueT> input) {
+  public PCollection<SMBFile> expand(PCollection<ValueT> input) {
     withJoinKeyOutput = new TupleTag<KV<Integer, KV<byte[], byte[]>>>() {};
     recordSizesOutput = new TupleTag<Double>() {};
     hashedBucketKeys = new TupleTag<Integer>() {};
@@ -75,7 +75,7 @@ public class SMBAutoShuffle<JoinKeyT, ValueT>
         .apply(
             SortValuesBytes.create(BufferedExternalSorter.options().withMemoryMB(BUCKET_SIZE_MB)))
         .apply("Wrap in SMBFiles", MapElements.via(new WrapSMBFileFn()))
-        .setCoder(SMBFileBeam.coder());
+        .setCoder(SMBFile.coder());
   }
 
   private class JoinKeySerializeWithSideOutputFn
@@ -125,11 +125,11 @@ public class SMBAutoShuffle<JoinKeyT, ValueT>
   }
 
   private class WrapSMBFileFn
-      extends SimpleFunction<KV<KV<Integer, Integer>, Iterable<KV<byte[], byte[]>>>, SMBFileBeam> {
+      extends SimpleFunction<KV<KV<Integer, Integer>, Iterable<KV<byte[], byte[]>>>, SMBFile> {
 
     @Override
-    public SMBFileBeam apply(final KV<KV<Integer, Integer>, Iterable<KV<byte[], byte[]>>> input) {
-      return SMBFileBeam.create(
+    public SMBFile apply(final KV<KV<Integer, Integer>, Iterable<KV<byte[], byte[]>>> input) {
+      return SMBFile.create(
           input.getKey().getKey(),
           input.getKey().getValue(),
           StreamSupport.stream(input.getValue().spliterator(), false)

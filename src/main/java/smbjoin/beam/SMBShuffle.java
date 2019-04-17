@@ -13,7 +13,7 @@ import org.apache.beam.sdk.values.KV;
 import org.apache.beam.sdk.values.PCollection;
 
 public class SMBShuffle<JoinKeyT, ValueT>
-    extends PTransform<PCollection<ValueT>, PCollection<SMBFileBeam>> {
+    extends PTransform<PCollection<ValueT>, PCollection<SMBFile>> {
 
   private SMBPartitioning<JoinKeyT, ValueT> SMBPartitioning;
   private int numBuckets;
@@ -29,7 +29,7 @@ public class SMBShuffle<JoinKeyT, ValueT>
   }
 
   @Override
-  public PCollection<SMBFileBeam> expand(PCollection<ValueT> input) {
+  public PCollection<SMBFile> expand(PCollection<ValueT> input) {
     return input
         .apply(
             "Extract joinKey and serialize",
@@ -37,7 +37,7 @@ public class SMBShuffle<JoinKeyT, ValueT>
         .apply(GroupByKey.create())
         .apply(SortValuesBytes.create(BufferedExternalSorter.options().withMemoryMB(1024)))
         .apply("Wrap in SMBFiles", MapElements.via(new WrapSMBFileFn()))
-        .setCoder(SMBFileBeam.coder());
+        .setCoder(SMBFile.coder());
   }
 
   private class JoinKeySerializeFn extends SimpleFunction<ValueT, KV<Integer, KV<byte[], byte[]>>> {
@@ -62,11 +62,11 @@ public class SMBShuffle<JoinKeyT, ValueT>
   }
 
   private class WrapSMBFileFn
-      extends SimpleFunction<KV<Integer, Iterable<KV<byte[], byte[]>>>, SMBFileBeam> {
+      extends SimpleFunction<KV<Integer, Iterable<KV<byte[], byte[]>>>, SMBFile> {
 
     @Override
-    public SMBFileBeam apply(final KV<Integer, Iterable<KV<byte[], byte[]>>> input) {
-      return SMBFileBeam.create(
+    public SMBFile apply(final KV<Integer, Iterable<KV<byte[], byte[]>>> input) {
+      return SMBFile.create(
           input.getKey(),
           0,
           StreamSupport.stream(input.getValue().spliterator(), false)

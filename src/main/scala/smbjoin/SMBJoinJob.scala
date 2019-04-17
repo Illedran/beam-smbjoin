@@ -22,12 +22,19 @@ object SMBJoinJob {
     val output = args("output")
 
     val keysSchema =
-      new Schema.Parser().parse(new File("data/keys_schema.json"))
+      new Schema.Parser().parse(new File("schema/Key.avsc"))
     val eventSchema =
-      new Schema.Parser().parse(new File("data/events_schema.json"))
+      new Schema.Parser().parse(new File("schema/Event.avsc"))
 
     val input = sc
-      .smbReader(left, right, keysSchema, eventSchema)
+      .avroSmbFile[String, Key, Event](
+        left,
+        right,
+        keysSchema,
+        eventSchema,
+        _.getId.toString,
+        _.getId.toString
+      )
       .saveAsTextFile(output)
 
     val result = sc.close().waitUntilFinish()

@@ -12,6 +12,7 @@ import org.apache.beam.sdk.util.CoderUtils;
  */
 public interface SMBPartitioning<JoinKeyT, ValueT> extends Serializable {
   Coder<JoinKeyT> getJoinKeyCoder();
+  Coder<ValueT> getRecordCoder();
 
   JoinKeyT getJoinKey(ValueT value);
 
@@ -19,6 +20,15 @@ public interface SMBPartitioning<JoinKeyT, ValueT> extends Serializable {
     try {
       // Encode the key to use .hashBytes later
       return CoderUtils.encodeToByteArray(getJoinKeyCoder(), getJoinKey(value));
+    } catch (Exception e) {
+      throw new RuntimeException("Hashing failed", e);
+    }
+  }
+
+  default byte[] encodeJoinKey(JoinKeyT joinKey) {
+    try {
+      // Encode the key to use .hashBytes later
+      return CoderUtils.encodeToByteArray(getJoinKeyCoder(), joinKey);
     } catch (Exception e) {
       throw new RuntimeException("Hashing failed", e);
     }
