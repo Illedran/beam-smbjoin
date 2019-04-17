@@ -127,6 +127,13 @@ public class SMBAvroInput<K, L, R>
       final long rightBuckets =
           right.stream().mapToLong(SMBFileMetadata::bucketId).max().orElse(0) + 1;
 
+      long numBuckets = Math.min(leftBuckets, rightBuckets);
+
+      System.out.println(
+          String.format(
+              "Found %d (%d, %d) buckets over (%d, %d) shards",
+              numBuckets, leftBuckets, rightBuckets, left.size(), right.size()));
+
       // Bitwise magic
       if ((leftBuckets & (leftBuckets - 1)) != 0) {
         throw new RuntimeException("Number of buckets on the left should be a power of two.");
@@ -136,12 +143,6 @@ public class SMBAvroInput<K, L, R>
         throw new RuntimeException("Number of buckets on the right should be a power of two.");
       }
 
-      long numBuckets = Math.min(leftBuckets, rightBuckets);
-
-      System.out.println(
-          String.format(
-              "Found %d (%d, %d) buckets over (%d, %d) shards",
-              numBuckets, leftBuckets, rightBuckets, left.size(), right.size()));
       for (SMBFileMetadata leftIt : left) {
         for (SMBFileMetadata rightIt : right) {
           if (Math.floorMod(leftIt.bucketId(), numBuckets)
