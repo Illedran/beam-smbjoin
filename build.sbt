@@ -24,8 +24,7 @@ lazy val macroSettings = Seq(
   libraryDependencies += "org.scala-lang" % "scala-reflect" % scalaVersion.value,
   addCompilerPlugin(paradiseDependency)
 )
-lazy val root: Project = project
-  .in(file("."))
+lazy val root: Project = Project("smb-scio-test", file("."))
   .settings(commonSettings)
   .settings(macroSettings)
   .settings(
@@ -47,6 +46,7 @@ lazy val root: Project = project
     ).map(_.exclude("org.slf4j", "slf4j-log4j12"))
   )
   .enablePlugins(PackPlugin)
+
 lazy val repl: Project = project
   .in(file(".repl"))
   .settings(commonSettings)

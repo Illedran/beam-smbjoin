@@ -7,6 +7,7 @@ import com.google.common.collect.PeekingIterator;
 import com.google.common.primitives.UnsignedBytes;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.Serializable;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.util.ArrayList;
@@ -14,22 +15,36 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 import org.apache.avro.file.DataFileStream;
 import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.io.DatumReader;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.beam.sdk.coders.IterableCoder;
 import org.apache.beam.sdk.coders.KvCoder;
+import org.apache.beam.sdk.coders.NullableCoder;
+import org.apache.beam.sdk.coders.VoidCoder;
+import org.apache.beam.sdk.io.FileIO;
 import org.apache.beam.sdk.io.FileSystems;
 import org.apache.beam.sdk.io.fs.MatchResult;
+import org.apache.beam.sdk.io.fs.MatchResult.Metadata;
 import org.apache.beam.sdk.io.fs.ResourceId;
+import org.apache.beam.sdk.schemas.transforms.CoGroup;
 import org.apache.beam.sdk.transforms.Create;
 import org.apache.beam.sdk.transforms.DoFn;
+import org.apache.beam.sdk.transforms.FlatMapElements;
+import org.apache.beam.sdk.transforms.MapElements;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.ParDo;
 import org.apache.beam.sdk.transforms.Reshuffle;
+import org.apache.beam.sdk.transforms.SimpleFunction;
+import org.apache.beam.sdk.transforms.join.CoGbkResult;
+import org.apache.beam.sdk.transforms.join.CoGroupByKey;
+import org.apache.beam.sdk.transforms.join.KeyedPCollectionTuple;
 import org.apache.beam.sdk.values.KV;
 import org.apache.beam.sdk.values.PBegin;
 import org.apache.beam.sdk.values.PCollection;
+import org.apache.beam.sdk.values.TupleTag;
 import smbjoin.SerializableSchema;
 
 public class SMBAvroInput<K, L, R>
@@ -68,34 +83,28 @@ public class SMBAvroInput<K, L, R>
         leftSpec, rightSpec, leftSchema, rightSchema, leftSMBReader, rightSMBReader);
   }
 
-  private SMBFileMetadata getBucketingMetadata(
-      ResourceId resourceId, SerializableSchema serializableSchema) {
-    checkNotNull(resourceId);
-    try {
-      ReadableByteChannel channel = FileSystems.open(resourceId);
-      try (DataFileStream stream =
-          new DataFileStream(
-              Channels.newInputStream(channel),
-              new GenericDatumReader(serializableSchema.schema()))) {
-        return SMBFileMetadata.create(
-            resourceId,
-            stream.getMetaLong("smbjoin.bucketId"),
-            stream.getMetaLong("smbjoin.shardId"));
-      } finally {
-        if (channel.isOpen()) {
-          channel.close();
-        }
-      }
-    } catch (IOException e) {
-      throw new RuntimeException("Can't read file");
-    }
-  }
-
   @Override
   public PCollection<KV<K, KV<Iterable<L>, Iterable<R>>>> expand(final PBegin input) {
-    return input
-        .apply(Create.<Void>of(Collections.singletonList(null)))
-        .apply(ParDo.of(new SMBFileIOFn()))
+    PCollection<KV<Void, SMBFileMetadata>> left = input.apply("Left: Create match", Create.of(leftSpec))
+        .apply("Left: Match files", FileIO.matchAll())
+        .apply("Left: Extract metadata", ParDo.of(new ExtractAvroMetadataFn<L>(leftSchema)))
+        .setCoder(KvCoder.of(VoidCoder.of(), SMBFileMetadata.coder()));
+
+    PCollection<KV<Void, SMBFileMetadata>> right =
+        input
+            .apply("Right: Create match", Create.of(rightSpec))
+            .apply("Right: Match files", FileIO.matchAll())
+        .apply("Right: Extract metadata", ParDo.of(new ExtractAvroMetadataFn<R>(rightSchema)))
+        .setCoder(KvCoder.of(VoidCoder.of(), SMBFileMetadata.coder()));
+
+    final TupleTag<SMBFileMetadata> leftTag = new TupleTag<>();
+    final TupleTag<SMBFileMetadata> rightTag = new TupleTag<>();
+
+    return KeyedPCollectionTuple
+        .of(leftTag, left)
+        .and(rightTag, right)
+        .apply(CoGroupByKey.create())
+        .apply(FlatMapElements.via(new ResolveBucketing(leftTag, rightTag)))
         .apply(Reshuffle.viaRandomKey())
         .apply(ParDo.of(new SortMergeJoinDoFn()))
         .setCoder(
@@ -106,33 +115,77 @@ public class SMBAvroInput<K, L, R>
                     IterableCoder.of(rightSMBPartitioning.getRecordCoder()))));
   }
 
-  private class SMBFileIOFn extends DoFn<Void, KV<ResourceId, ResourceId>> {
+  private class ExtractAvroMetadataFn<T> extends DoFn<Metadata, KV<Void, SMBFileMetadata>> {
+    private SerializableSchema serializableSchema;
+    private DatumReader<T> reader;
+
+    @Setup
+    public void setup() {
+      this.reader = new SpecificDatumReader<>(serializableSchema.schema());
+    }
+
+    ExtractAvroMetadataFn(SerializableSchema serializableSchema) {
+      this.serializableSchema = serializableSchema;
+    }
+
+    private SMBFileMetadata getBucketingMetadata(
+        ResourceId resourceId, DatumReader<T> reader) {
+      checkNotNull(resourceId);
+      try (ReadableByteChannel channel = FileSystems.open(resourceId);
+          InputStream inputStream = Channels.newInputStream(channel);
+          DataFileStream<T> stream = new DataFileStream<>(inputStream, reader)) {
+        return SMBFileMetadata.create(
+            resourceId,
+            Integer.parseInt(stream.getMetaString("smbjoin.bucketId")),
+            Integer.parseInt(stream.getMetaString("smbjoin.shardId")));
+      } catch (IOException e) {
+        throw new RuntimeException("Can't read file");
+      }
+    }
 
     @ProcessElement
-    public void processElement(ProcessContext c) throws IOException {
-      final List<SMBFileMetadata> left =
-          FileSystems.match(leftSpec).metadata().stream()
-              .map(MatchResult.Metadata::resourceId)
-              .map(rId -> getBucketingMetadata(rId, leftSchema))
-              .collect(Collectors.toList());
+    public void processElement(@Element Metadata input, ProcessContext c) {
+      c.output(KV.of(null, getBucketingMetadata(input.resourceId(), reader)));
+    }
+  }
 
-      final List<SMBFileMetadata> right =
-          FileSystems.match(rightSpec).metadata().stream()
-              .map(MatchResult.Metadata::resourceId)
-              .map(rId -> getBucketingMetadata(rId, rightSchema))
-              .collect(Collectors.toList());
+  private class ResolveBucketing
+      extends SimpleFunction<KV<Void, CoGbkResult>, Iterable<KV<ResourceId, ResourceId>>> {
 
-      final long leftBuckets =
-          left.stream().mapToLong(SMBFileMetadata::bucketId).max().orElse(0) + 1;
-      final long rightBuckets =
-          right.stream().mapToLong(SMBFileMetadata::bucketId).max().orElse(0) + 1;
+    private TupleTag<SMBFileMetadata> leftTag;
+    private TupleTag<SMBFileMetadata> rightTag;
+
+    ResolveBucketing(TupleTag<SMBFileMetadata> leftTag, TupleTag<SMBFileMetadata> rightTag) {
+      this.leftTag = leftTag;
+      this.rightTag = rightTag;
+    }
+
+    @Override
+    public Iterable<KV<ResourceId, ResourceId>> apply(final KV<Void, CoGbkResult> input) {
+      Iterable<SMBFileMetadata> leftIt = input.getValue().getAll(leftTag);
+      Iterable<SMBFileMetadata> rightIt = input.getValue().getAll(rightTag);
+
+      ArrayList<KV<ResourceId, ResourceId>> result = new ArrayList<>();
+
+      long leftBuckets = 0;
+      long rightBuckets = 0;
+      long leftShards = 0;
+      long rightShards = 0;
+      for (SMBFileMetadata left : leftIt) {
+        leftBuckets = Math.max(leftBuckets, left.bucketId() + 1);
+        leftShards++;
+      }
+      for (SMBFileMetadata right : rightIt) {
+        rightBuckets = Math.max(rightBuckets, right.bucketId() + 1);
+        rightShards++;
+      }
 
       long numBuckets = Math.min(leftBuckets, rightBuckets);
 
       System.out.println(
           String.format(
               "Found %d (%d, %d) buckets over (%d, %d) shards",
-              numBuckets, leftBuckets, rightBuckets, left.size(), right.size()));
+              numBuckets, leftBuckets, rightBuckets, leftShards, rightShards));
 
       // Bitwise magic
       if ((leftBuckets & (leftBuckets - 1)) != 0) {
@@ -143,14 +196,16 @@ public class SMBAvroInput<K, L, R>
         throw new RuntimeException("Number of buckets on the right should be a power of two.");
       }
 
-      for (SMBFileMetadata leftIt : left) {
-        for (SMBFileMetadata rightIt : right) {
-          if (Math.floorMod(leftIt.bucketId(), numBuckets)
-              == Math.floorMod(rightIt.bucketId(), numBuckets)) {
-            c.output(KV.of(leftIt.resourceId(), rightIt.resourceId()));
+      for (SMBFileMetadata left : leftIt) {
+        for (SMBFileMetadata right : rightIt) {
+          if (Math.floorMod(left.bucketId(), numBuckets)
+              == Math.floorMod(right.bucketId(), numBuckets)) {
+            result.add(KV.of(left.resourceId(), right.resourceId()));
           }
         }
       }
+
+      return result;
     }
   }
 
@@ -180,6 +235,15 @@ public class SMBAvroInput<K, L, R>
       return groupKey;
     }
 
+    private SpecificDatumReader<L> leftReader;
+    private SpecificDatumReader<R> rightReader;
+
+    @Setup
+    public void setup() {
+      this.leftReader = new SpecificDatumReader<>(leftSchema.schema());
+      this.rightReader = new SpecificDatumReader<>(rightSchema.schema());
+    }
+
     @ProcessElement
     public void processElement(@Element KV<ResourceId, ResourceId> filePair, ProcessContext c)
         throws IOException {
@@ -188,14 +252,10 @@ public class SMBAvroInput<K, L, R>
 
       try (ReadableByteChannel leftChannel = FileSystems.open(leftFile);
           InputStream leftInputStream = Channels.newInputStream(leftChannel);
-          DataFileStream<L> leftStream =
-              new DataFileStream<>(
-                  leftInputStream, new SpecificDatumReader<>(leftSchema.schema()));
+          DataFileStream<L> leftStream = new DataFileStream<>(leftInputStream, leftReader);
           ReadableByteChannel rightChannel = FileSystems.open(rightFile);
           InputStream rightInputStream = Channels.newInputStream(rightChannel);
-          DataFileStream<R> rightStream =
-              new DataFileStream<>(
-                  rightInputStream, new SpecificDatumReader<>(rightSchema.schema()))) {
+          DataFileStream<R> rightStream = new DataFileStream<>(rightInputStream, rightReader)) {
 
         ArrayList<L> leftBuffer = new ArrayList<>();
         ArrayList<R> rightBuffer = new ArrayList<>();
