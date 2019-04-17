@@ -4,6 +4,7 @@ import java.io.File
 
 import com.spotify.scio._
 import org.apache.avro.Schema
+import org.apache.avro.generic.GenericRecord
 import smbjoin.SMBScioContext._
 
 /*
@@ -27,13 +28,13 @@ object SMBJoinJob {
       new Schema.Parser().parse(new File("schema/Event.avsc"))
 
     val input = sc
-      .avroSmbFile[String, Key, Event](
+      .avroSmbFile[String, GenericRecord, GenericRecord](
         left,
         right,
         keysSchema,
         eventSchema,
-        _.getId.toString,
-        _.getId.toString
+        _.get("id").toString,
+        _.get("id").toString
       )
       .saveAsTextFile(output)
 
