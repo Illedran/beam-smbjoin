@@ -1,31 +1,18 @@
 package smbjoin
 
-import java.nio.channels.Channels
-
-import com.google.common.base.Preconditions.checkNotNull
-import org.apache.avro.Schema
-import org.apache.avro.file.DataFileStream
-import org.apache.avro.generic.{GenericDatumReader, GenericRecord}
-import org.apache.beam.sdk.io.FileSystems
-import org.apache.beam.sdk.io.fs.ResourceId
+import org.apache.avro.generic.GenericRecord
 
 import scala.collection.mutable
-import scala.util.hashing.MurmurHash3
 
 object SMBUtils {
   val ordering: Ordering[GenericRecord] = Ordering.by(joinKey)
 
-
-  def joinKey(record: GenericRecord): String = record.get("id").toString
-
   def smbJoin(
-               leftIt: BufferedIterator[GenericRecord],
-               rightIt: BufferedIterator[GenericRecord]
-             ): Iterable[(String, Iterable[GenericRecord], Iterable[GenericRecord])] = {
+    leftIt: BufferedIterator[GenericRecord],
+    rightIt: BufferedIterator[GenericRecord]
+  ): Iterable[(String, Iterable[GenericRecord], Iterable[GenericRecord])] = {
 
-    def consumeGroup(
-                      bIt: BufferedIterator[GenericRecord]
-                    ) = {
+    def consumeGroup(bIt: BufferedIterator[GenericRecord]) = {
       val buffer = mutable.ListBuffer.newBuilder[GenericRecord]
       val groupKey = SMBUtils.joinKey(bIt.head)
       while (bIt.hasNext && SMBUtils.joinKey(bIt.head) == groupKey) {
@@ -62,5 +49,7 @@ object SMBUtils {
     }
     buffer.result
   }
+
+  def joinKey(record: GenericRecord): String = record.get("id").toString
 
 }

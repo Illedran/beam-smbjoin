@@ -12,6 +12,7 @@ import org.apache.beam.sdk.util.CoderUtils;
  */
 public interface SMBPartitioning<JoinKeyT, ValueT> extends Serializable {
   Coder<JoinKeyT> getJoinKeyCoder();
+
   Coder<ValueT> getRecordCoder();
 
   JoinKeyT getJoinKey(ValueT value);

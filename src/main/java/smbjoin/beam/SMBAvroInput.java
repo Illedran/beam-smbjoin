@@ -12,7 +12,6 @@ import java.nio.channels.ReadableByteChannel;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.avro.file.DataFileStream;
@@ -107,7 +106,6 @@ public class SMBAvroInput<K, L, R>
                     IterableCoder.of(rightSMBPartitioning.getRecordCoder()))));
   }
 
-
   private class SMBFileIOFn extends DoFn<Void, KV<ResourceId, ResourceId>> {
 
     @ProcessElement
@@ -168,8 +166,8 @@ public class SMBAvroInput<K, L, R>
 
       boolean done = false;
       while (iterator.hasNext() && !done) {
-        int compareResults = comparator.compare(
-            encodedGroupKey, partitioning.getEncodedJoinKey(iterator.peek()));
+        int compareResults =
+            comparator.compare(encodedGroupKey, partitioning.getEncodedJoinKey(iterator.peek()));
         if (compareResults < 0) {
           done = true;
         } else if (compareResults == 0) {
@@ -214,9 +212,10 @@ public class SMBAvroInput<K, L, R>
           } else if (!leftIt.hasNext() && rightIt.hasNext()) { // Left is empty, right outer join
             groupKey = consumeIterator(rightIt, rightBuffer, rightSMBPartitioning);
           } else {
-            int compareResults = comparator.compare(
-                leftSMBPartitioning.getEncodedJoinKey(leftIt.peek()),
-                rightSMBPartitioning.getEncodedJoinKey(rightIt.peek()));
+            int compareResults =
+                comparator.compare(
+                    leftSMBPartitioning.getEncodedJoinKey(leftIt.peek()),
+                    rightSMBPartitioning.getEncodedJoinKey(rightIt.peek()));
             if (compareResults < 0) {
               groupKey = consumeIterator(leftIt, leftBuffer, leftSMBPartitioning);
             } else if (compareResults == 0) {

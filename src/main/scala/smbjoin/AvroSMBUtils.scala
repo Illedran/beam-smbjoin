@@ -7,9 +7,10 @@ import smbjoin.beam.SMBPartitioning
 
 object AvroSMBUtils {
 
-  def getAvroSMBPartitioning[K, T](schema: Schema, joinKeyFn: T => K)(
-    implicit koder: Coder[K], toder: Coder[T]
-  ): SMBPartitioning[K, T] = {
+  def getAvroSMBPartitioning[K, T](
+    schema: Schema,
+    joinKeyFn: T => K
+  )(implicit koder: Coder[K], toder: Coder[T]): SMBPartitioning[K, T] = {
     val beamKoder: BCoder[K] = CoderMaterializer.beamWithDefault(koder)
     val beamToder: BCoder[T] = CoderMaterializer.beamWithDefault(toder)
     new SMBPartitioning[K, T] {
