@@ -35,7 +35,7 @@ class BucketedSCollection[T](@transient val self: SCollection[T])(
       )
   }
 
-  def saveAsBucketedAvroFileWithSkew[K: Coder](path: String,
+  def saveAsBucketedAvroFileAuto[K: Coder](path: String,
                                                eps: Double,
                                                schema: Schema,
                                                joinKeyFn: T => K,
@@ -51,15 +51,17 @@ class BucketedSCollection[T](@transient val self: SCollection[T])(
 
   }
 
-  def saveAsBucketedAvroFileWithSkew[K: Coder](path: String,
-                                               schema: Schema,
-                                               joinKeyFn: T => K,
-                                              ): Unit = {
+  def saveAsBucketedAvroFileSize[K: Coder](path: String,
+                                           schema: Schema,
+                                           joinKeyFn: T => K,
+                                           bucketSizeMB: Int = 256,
+                                          ): Unit = {
 
     val partitioning = AvroSMBUtils.getAvroSMBPartitioning(schema, joinKeyFn)
 
     self.internal
-      .apply(SMBSizeShuffle.builder().smbPartitioning(partitioning).build())
+      .apply(SMBSizeShuffle.builder().bucketSizeMB(bucketSizeMB)
+        .smbPartitioning(partitioning).build())
       .apply(
         SMBAvroSink.create(FileSystems.matchNewResource(path, true), schema)
       )

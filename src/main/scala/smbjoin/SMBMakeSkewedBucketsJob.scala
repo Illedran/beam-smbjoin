@@ -28,7 +28,6 @@ object SMBMakeSkewedBucketsJob {
     val output = args("output")
     val avroSchemaPath = args.optional("avroSchema")
     val schemaFilePath = args.optional("schemaFile")
-    val skewnessEps = args("skewnessEps").toDouble
 
     if (avroSchemaPath.isEmpty && schemaFilePath.isEmpty) {
       sys.error("One of --avroSchema or --schemaFile is required.")
@@ -57,7 +56,7 @@ object SMBMakeSkewedBucketsJob {
     val joinKey: GenericRecord => String = _.get("id").toString
 
     sc.avroFile[GenericRecord](input, schema = schema)
-      .saveAsBucketedAvroFileWithSkew(output, skewnessEps, schema, joinKey)
+      .saveAsBucketedAvroFileSize(output, schema, joinKey)
 
     val result = sc.close().waitUntilFinish()
   }

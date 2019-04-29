@@ -27,9 +27,6 @@ import org.apache.beam.sdk.values.TupleTagList;
 public abstract class SMBSizeShuffle<JoinKeyT, ValueT>
     extends PTransform<PCollection<ValueT>, PCollection<SMBFile>> {
 
-  /** Default size of a bucket in MiB. */
-  public final static int DEFAULT_BUCKET_SIZE_MB = 256;
-
   /** Copied from InMemorySorter: 11 words of 8 bytes each. */
   public final static int DEFAULT_BYTE_OVERHEAD_PER_RECORD = 11 * 8;
 
@@ -75,7 +72,7 @@ public abstract class SMBSizeShuffle<JoinKeyT, ValueT>
             .apply(ResolveSkewnessSize.create(numBucketsView, bucketSizeMB()));
 
     return res1.get(withJoinKeyOutput)
-        .apply(SMBKeyAssigner.random(numBucketsView, filesPerBucketMapView))
+        .apply(SMBKeyAssigner.roundRobin(numBucketsView, filesPerBucketMapView))
         .apply(GroupByKey.create())
         .apply(
             SortValuesBytes.create(BufferedExternalSorter.options().withMemoryMB(bucketSizeMB())))
@@ -85,7 +82,6 @@ public abstract class SMBSizeShuffle<JoinKeyT, ValueT>
 
   public static <JoinKeyT, ValueT> Builder<JoinKeyT, ValueT> builder() {
     return new AutoValue_SMBSizeShuffle.Builder<JoinKeyT, ValueT>()
-        .bucketSizeMB(DEFAULT_BUCKET_SIZE_MB)
         .recordOverhead(DEFAULT_BYTE_OVERHEAD_PER_RECORD);
   }
 
