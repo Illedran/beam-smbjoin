@@ -26,16 +26,16 @@ public class SMBAutoShuffle<JoinKeyT, ValueT>
     extends PTransform<PCollection<ValueT>, PCollection<SMBFile>> {
 
   private final int BUCKET_SIZE_MB = 256;
-  private SMBPartitioning<JoinKeyT, ValueT> SMBPartitioning;
+  private SMBPartitioning<JoinKeyT, ValueT> smbPartitioning;
   private TupleTag<KV<Integer, KV<byte[], byte[]>>> withJoinKeyOutput;
-  private TupleTag<Double> recordSizesOutput;
+  private final TupleTag<Long> recordSizesOutput = new TupleTag<Long>(){};
   private TupleTag<Integer> hashedBucketKeys;
   private PCollectionView<Integer> numBucketsView;
   private PCollectionView<Map<Integer, Integer>> filesPerBucketMapView;
   private double eps;
 
   private SMBAutoShuffle(SMBPartitioning<JoinKeyT, ValueT> SMBPartitioning, double eps) {
-    this.SMBPartitioning = SMBPartitioning;
+    this.smbPartitioning = SMBPartitioning;
     this.eps = eps;
   }
 
@@ -47,7 +47,6 @@ public class SMBAutoShuffle<JoinKeyT, ValueT>
   @Override
   public PCollection<SMBFile> expand(PCollection<ValueT> input) {
     withJoinKeyOutput = new TupleTag<KV<Integer, KV<byte[], byte[]>>>() {};
-    recordSizesOutput = new TupleTag<Double>() {};
     hashedBucketKeys = new TupleTag<Integer>() {};
 
     PCollectionTuple res1 =
@@ -59,9 +58,7 @@ public class SMBAutoShuffle<JoinKeyT, ValueT>
 
     numBucketsView =
         res1.get(recordSizesOutput)
-            .apply(Sum.doublesGlobally())
-            .apply(MapElements.via(new ComputeNumBucketsFn()))
-            .apply(View.asSingleton());
+            .apply(ComputeNumBuckets.of(BUCKET_SIZE_MB));
 
     filesPerBucketMapView =
         res1.get(hashedBucketKeys)
@@ -89,12 +86,12 @@ public class SMBAutoShuffle<JoinKeyT, ValueT>
     @ProcessElement
     public void processElement(@Element ValueT value, MultiOutputReceiver out) {
       try {
-        byte[] encodedJoinKey = SMBPartitioning.getEncodedJoinKey(value);
-        int bucketKey = SMBPartitioning.hashEncodedKey(encodedJoinKey);
-        byte[] encodedValue = CoderUtils.encodeToByteArray(inputCoder, value);
-        out.get(recordSizesOutput).output(encodedValue.length + 13 * 8.0);
+        byte[] encodedJoinKey = smbPartitioning.getEncodedJoinKey(value);
+        int bucketKey = smbPartitioning.hashEncodedKey(encodedJoinKey);
+        byte[] encodedRecord = CoderUtils.encodeToByteArray(inputCoder, value);
+        out.get(recordSizesOutput).output(encodedRecord.length + 11 * 8L);
         out.get(hashedBucketKeys).output(bucketKey);
-        out.get(withJoinKeyOutput).output(KV.of(bucketKey, KV.of(encodedJoinKey, encodedValue)));
+        out.get(withJoinKeyOutput).output(KV.of(bucketKey, KV.of(encodedJoinKey, encodedRecord)));
       } catch (Exception e) {
         throw new RuntimeException(e);
       }

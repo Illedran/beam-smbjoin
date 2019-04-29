@@ -65,9 +65,9 @@ public class SMBAvroSink extends PTransform<PCollection<SMBFile>, PDone> {
                       .withSuffix(suffix))
               .unwindowedFilename(0, 1, FileBasedSink.CompressionType.UNCOMPRESSED);
 
-      WritableByteChannel channel = FileSystems.create(resourceId, "application/avro");
 
-      try (DataFileWriter<GenericRecord> dataFileWriter =
+      try (WritableByteChannel channel = FileSystems.create(resourceId, "application/avro");
+          DataFileWriter<GenericRecord> dataFileWriter =
           new DataFileWriter<GenericRecord>(new GenericDatumWriter<>())
               .setCodec(CodecFactory.deflateCodec(6))
               .setMeta("smbjoin.bucketId", bucketId)
@@ -75,10 +75,6 @@ public class SMBAvroSink extends PTransform<PCollection<SMBFile>, PDone> {
               .create(serializableSchema.schema(), Channels.newOutputStream(channel))) {
         for (byte[] t : c.element().values()) {
           dataFileWriter.appendEncoded(ByteBuffer.wrap(t));
-        }
-      } finally {
-        if (channel.isOpen()) {
-          channel.close();
         }
       }
     }
