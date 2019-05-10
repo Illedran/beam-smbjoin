@@ -5,6 +5,7 @@ import com.spotify.scio.values.SCollection
 import org.apache.avro.Schema
 import org.apache.beam.sdk.io.FileSystems
 import smbjoin.beam.{SMBAutoShuffle, SMBAvroSink, SMBShuffle, SMBSizeShuffle}
+import smbjoin.beam.SMBPartitioning
 
 object BucketedSCollectionFunctions {
 
@@ -36,9 +37,9 @@ class BucketedSCollection[T](@transient val self: SCollection[T])(
   }
 
   def saveAsBucketedAvroFileAuto[K: Coder](path: String,
-                                               eps: Double,
-                                               schema: Schema,
-                                               joinKeyFn: T => K,
+                                           eps: Double,
+                                           schema: Schema,
+                                           joinKeyFn: T => K,
   ): Unit = {
 
     val partitioning = AvroSMBUtils.getAvroSMBPartitioning(schema, joinKeyFn)
@@ -55,13 +56,18 @@ class BucketedSCollection[T](@transient val self: SCollection[T])(
                                            schema: Schema,
                                            joinKeyFn: T => K,
                                            bucketSizeMB: Int = 256,
-                                          ): Unit = {
+  ): Unit = {
 
     val partitioning = AvroSMBUtils.getAvroSMBPartitioning(schema, joinKeyFn)
 
     self.internal
-      .apply(SMBSizeShuffle.builder().bucketSizeMB(bucketSizeMB)
-        .smbPartitioning(partitioning).build())
+      .apply(
+        SMBSizeShuffle
+          .builder()
+          .bucketSizeMB(bucketSizeMB)
+          .smbPartitioning(partitioning)
+          .build()
+      )
       .apply(
         SMBAvroSink.create(FileSystems.matchNewResource(path, true), schema)
       )

@@ -11,9 +11,9 @@ import org.apache.beam.sdk.values.KV;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PCollectionView;
 
-public class SMBKeyAssigner {
+public class SMBShardKeyAssigner {
 
-  private SMBKeyAssigner() {}
+  private SMBShardKeyAssigner() {}
 
   public static Random random(
       PCollectionView<Integer> numBucketsView,
@@ -33,20 +33,20 @@ public class SMBKeyAssigner {
           PCollection<KV<Integer, KV<byte[], byte[]>>>,
           PCollection<KV<KV<Integer, Integer>, KV<byte[], byte[]>>>> {
 
-    public static RoundRobin create(
-        PCollectionView<Integer> numBucketsView,
-        PCollectionView<Map<Integer, Integer>> filesPerBucketMapView) {
-      return new AutoValue_SMBKeyAssigner_RoundRobin(numBucketsView, filesPerBucketMapView);
-    }
 
     abstract PCollectionView<Integer> numBucketsView();
 
     abstract PCollectionView<Map<Integer, Integer>> filesPerBucketMapView();
 
+    public static RoundRobin create(PCollectionView<Integer> numBucketsView,
+        PCollectionView<Map<Integer, Integer>> filesPerBucketMapView) {
+      return new AutoValue_SMBShardKeyAssigner_RoundRobin(numBucketsView, filesPerBucketMapView);
+    }
+
     @Override
     public PCollection<KV<KV<Integer, Integer>, KV<byte[], byte[]>>> expand(
         PCollection<KV<Integer, KV<byte[], byte[]>>> input) {
-      return input.apply(
+      return input.apply("RoundRobin shard assignment",
           ParDo.of(
                   new DoFn<
                       KV<Integer, KV<byte[], byte[]>>,
@@ -83,20 +83,19 @@ public class SMBKeyAssigner {
           PCollection<KV<Integer, KV<byte[], byte[]>>>,
           PCollection<KV<KV<Integer, Integer>, KV<byte[], byte[]>>>> {
 
-    public static Random create(
-        PCollectionView<Integer> numBucketsView,
-        PCollectionView<Map<Integer, Integer>> filesPerBucketMapView) {
-      return new AutoValue_SMBKeyAssigner_Random(numBucketsView, filesPerBucketMapView);
-    }
-
     abstract PCollectionView<Integer> numBucketsView();
 
     abstract PCollectionView<Map<Integer, Integer>> filesPerBucketMapView();
 
+    public static Random create(PCollectionView<Integer> numBucketsView,
+        PCollectionView<Map<Integer, Integer>> filesPerBucketMapView) {
+      return new AutoValue_SMBShardKeyAssigner_Random(numBucketsView, filesPerBucketMapView);
+    }
+
     @Override
     public PCollection<KV<KV<Integer, Integer>, KV<byte[], byte[]>>> expand(
         PCollection<KV<Integer, KV<byte[], byte[]>>> input) {
-      return input.apply(
+      return input.apply("Random shard assignment",
           ParDo.of(
                   new DoFn<
                       KV<Integer, KV<byte[], byte[]>>,

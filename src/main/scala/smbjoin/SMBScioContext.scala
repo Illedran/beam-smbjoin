@@ -4,9 +4,7 @@ import com.spotify.scio.ScioContext
 import com.spotify.scio.coders.Coder
 import com.spotify.scio.values.SCollection
 import org.apache.avro.Schema
-import smbjoin.beam.SMBAvroInput
-
-import scala.collection.JavaConverters._
+import smbjoin.beam.{SMBAvroInput, SMBJoinType}
 
 object SMBScioContext {
 
@@ -19,14 +17,14 @@ object SMBScioContext {
 
 class SMBScioContext(@transient val self: ScioContext) {
 
-  def avroSmbFile[K: Coder, L: Coder, R: Coder](
+  def avroSmbFileInnerJoin[K: Coder, L: Coder, R: Coder](
     leftSpec: String,
     rightSpec: String,
     leftSchema: Schema,
     rightSchema: Schema,
     leftKeyFn: L => K,
     rightKeyFn: R => K
-  ): SCollection[(K, Iterable[L], Iterable[R])] = {
+  ): SCollection[(K, (L, R))] = {
 
     self
       .customInput(
@@ -40,11 +38,10 @@ class SMBScioContext(@transient val self: ScioContext) {
           AvroSMBUtils.getAvroSMBPartitioning(rightSchema, rightKeyFn)
         )
       )
+      .applyTransform(SMBJoinType.innerJoin[K, L, R])
       .map { kv =>
-        val value = kv.getValue
-        (kv.getKey, value.getKey.asScala, value.getValue.asScala)
+        val joined = kv.getValue
+        (kv.getKey, (joined.getKey, joined.getValue))
       }
-
   }
-
 }

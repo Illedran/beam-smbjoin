@@ -2,7 +2,6 @@ package smbjoin.beam;
 
 import com.google.auto.value.AutoValue;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.apache.beam.sdk.coders.Coder;
@@ -13,8 +12,6 @@ import org.apache.beam.sdk.transforms.MapElements;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.ParDo;
 import org.apache.beam.sdk.transforms.SimpleFunction;
-import org.apache.beam.sdk.transforms.Sum;
-import org.apache.beam.sdk.transforms.View;
 import org.apache.beam.sdk.util.CoderUtils;
 import org.apache.beam.sdk.values.KV;
 import org.apache.beam.sdk.values.PCollection;
@@ -27,8 +24,8 @@ import org.apache.beam.sdk.values.TupleTagList;
 public abstract class SMBSizeShuffle<JoinKeyT, ValueT>
     extends PTransform<PCollection<ValueT>, PCollection<SMBFile>> {
 
-  /** Copied from InMemorySorter: 11 words of 8 bytes each. */
-  public final static int DEFAULT_BYTE_OVERHEAD_PER_RECORD = 11 * 8;
+  /** Copied from InMemorySorter: 13 words of 8 bytes each. */
+  public final static int DEFAULT_BYTE_OVERHEAD_PER_RECORD = 13 * 8;
 
   private final TupleTag<KV<Integer, KV<byte[], byte[]>>> withJoinKeyOutput =
       new TupleTag<KV<Integer, KV<byte[], byte[]>>>(){};
@@ -72,7 +69,7 @@ public abstract class SMBSizeShuffle<JoinKeyT, ValueT>
             .apply(ResolveSkewnessSize.create(numBucketsView, bucketSizeMB()));
 
     return res1.get(withJoinKeyOutput)
-        .apply(SMBKeyAssigner.roundRobin(numBucketsView, filesPerBucketMapView))
+        .apply(SMBShardKeyAssigner.roundRobin(numBucketsView, filesPerBucketMapView))
         .apply(GroupByKey.create())
         .apply(
             SortValuesBytes.create(BufferedExternalSorter.options().withMemoryMB(bucketSizeMB())))
