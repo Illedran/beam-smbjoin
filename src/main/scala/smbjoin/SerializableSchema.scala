@@ -1,6 +1,11 @@
 package smbjoin
 
-import java.io.{IOException, ObjectInputStream, ObjectOutputStream, Serializable}
+import java.io.{
+  IOException,
+  ObjectInputStream,
+  ObjectOutputStream,
+  Serializable
+}
 
 import org.apache.avro.Schema
 

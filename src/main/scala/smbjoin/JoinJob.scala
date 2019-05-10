@@ -10,26 +10,21 @@ import org.apache.avro.file.DataFileStream
 import org.apache.avro.generic.{GenericDatumReader, GenericRecord}
 import org.apache.beam.sdk.io.FileSystems
 import org.apache.beam.sdk.options.PipelineOptionsFactory
-import smbjoin.BucketedSCollectionFunctions._
 
-/* Example:
-sbt "runMain smbjoin.SMBMakeBucketsJobBeam
-  --input=data/events-1000000-0.avro
-  --schemaFile=schema/Event.avsc
-  --output=bucketed/events-100000-0
-  --numBuckets=20
+/*
+sbt "runMain example.SMBMakeBucketsExample
+  --project=[PROJECT] --runner=DataflowRunner --zone=[ZONE]
+  --input=gs://dataflow-samples/shakespeare/kinglear.txt
+  --output=gs://[BUCKET]/[PATH]/wordcount"
  */
 
-object SMBMakeBucketsJob {
-
-  import smbjoin.beam.{SMBAvroSink, SMBPartitioning, SMBShuffle}
+object JoinJob {
 
   def main(cmdlineArgs: Array[String]): Unit = {
     val (sc, args) = ContextAndArgs(cmdlineArgs)
 
-    val input = args("input")
-    val output = args("output")
-    val numBuckets = args("numBuckets").toInt
+    val left = args("inputLeft")
+    val right = args("inputRight")
     val avroSchemaPath = args.optional("avroSchema")
     val schemaFilePath = args.optional("schemaFile")
 
@@ -61,16 +56,29 @@ object SMBMakeBucketsJob {
       Integer.parseInt(input.get("id").toString, 16)
     }
 
-    val partitioning: SMBPartitioning[Int, GenericRecord] =
-      AvroSMBUtils.getAvroSMBSimplePartitioning(schema, joinKey)
+    val leftSCollection = sc
+      .avroFile[GenericRecord](left, schema)
+      .withName("Extract key left")
+      .map { r =>
+        (joinKey(r), r)
+      }
 
+    val rightSCollection = sc
+      .avroFile[GenericRecord](right, schema)
+      .withName("Extract key right")
+      .map { r =>
+        (joinKey(r), r)
+      }
 
-    sc.avroFile[GenericRecord](input, schema = schema)
-      .internal
-      .apply(SMBShuffle.create(partitioning, numBuckets))
-      .apply(
-        SMBAvroSink.create(FileSystems.matchNewResource(output, true), schema)
-      )
+    val joined = leftSCollection.join(rightSCollection)
+
+    val joinedNum = ScioMetrics.counter("joinedRecordsCount")
+
+    val increaseCounter = joined
+        .withName("Increment counter")
+      .map { r =>
+        joinedNum.inc(); r
+      }
 
     val result = sc.close()
   }

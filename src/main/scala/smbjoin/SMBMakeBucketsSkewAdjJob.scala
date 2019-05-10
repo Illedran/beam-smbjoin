@@ -20,15 +20,16 @@ sbt "runMain smbjoin.SMBMakeBucketsJobBeam
   --numBuckets=20
  */
 
-object SMBMakeSkewedBucketsJob {
+object SMBMakeBucketsSkewAdjJob {
   def main(cmdlineArgs: Array[String]): Unit = {
+    import smbjoin.beam.{SMBAvroSink, SMBPartitioning, SMBSizeShuffle}
     val (sc, args) = ContextAndArgs(cmdlineArgs)
 
     val input = args("input")
     val output = args("output")
     val avroSchemaPath = args.optional("avroSchema")
     val schemaFilePath = args.optional("schemaFile")
-
+    val bucketSizeMB=args.getOrElse("bucketSizeMB","256").toInt
     if (avroSchemaPath.isEmpty && schemaFilePath.isEmpty) {
       sys.error("One of --avroSchema or --schemaFile is required.")
     }
@@ -53,11 +54,25 @@ object SMBMakeSkewedBucketsJob {
     implicit val coderGenericRecord: Coder[GenericRecord] =
       Coder.avroGenericRecordCoder(schema)
 
-    val joinKey: GenericRecord => String = _.get("id").toString
+    def joinKey(input: GenericRecord): Int = {
+      Integer.parseInt(input.get("id").toString, 16)
+    }
+
+    val partitioning: SMBPartitioning[Int, GenericRecord] =
+      AvroSMBUtils.getAvroSMBSimplePartitioning(schema, joinKey)
 
     sc.avroFile[GenericRecord](input, schema = schema)
-      .saveAsBucketedAvroFileSize(output, schema, joinKey)
-
-    val result = sc.close().waitUntilFinish()
+      .internal
+      .apply(
+        SMBSizeShuffle
+          .builder()
+          .bucketSizeMB(bucketSizeMB)
+          .smbPartitioning(partitioning)
+          .build()
+      )
+      .apply(
+        SMBAvroSink.create(FileSystems.matchNewResource(output, true), schema)
+      )
+    val result = sc.close()
   }
 }

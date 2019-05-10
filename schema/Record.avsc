@@ -1,15 +1,11 @@
 {
   "type": "record",
-  "name": "Event",
+  "name": "Record",
   "namespace": "smbjoin",
   "fields": [
     {
       "name": "id",
       "type": "string"
-    },
-    {
-      "name": "value",
-      "type": "double"
     }
   ]
 }
