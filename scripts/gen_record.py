@@ -6,14 +6,15 @@ import subprocess
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
-from typing import *
 from pathlib import Path
+from typing import *
+
 import math
 
 
 @dataclass(frozen=True)
 class GeneratorArgs:
-    C: int
+    input_count: int
     schema_file: Path
     output_path: Path
     key_bits: int
@@ -22,15 +23,17 @@ class GeneratorArgs:
     data_skew: float
 
 
-def _partition_n_over_k(n: int, k: int, weights: Iterable[float] = None) -> List[int]:
+def _partition_n_over_k(n: int, k: int, weights: Iterable[float] = None) -> \
+List[int]:
     if weights is None:
         return [n // k + (i < n % k) for i in range(k)]
     else:
         data = [int(n * w / sum(weights)) for w in weights]
-        assert(len(data) == k)
-        for i in range(n - len(data)):
+        assert (len(data) == k)
+        for i in range(n - sum(data)):
             data[i] += 1
         return data
+
 
 def generator(count, bucket_idx, gen_args: GeneratorArgs):
     record_template = b'{"id":"%0*x"}'
@@ -38,7 +41,7 @@ def generator(count, bucket_idx, gen_args: GeneratorArgs):
     key_length = math.ceil(gen_args.key_bits / 4)
 
     def get_record(seed):
-        key = (bucket_idx + gen_args.num_buckets * random.getrandbits(gen_args.key_bits)) % max_key
+        key = (bucket_idx + gen_args.num_buckets * seed) % max_key
         return record_template % (key_length, key)
 
     skewed_count = int(count * gen_args.data_skew)
@@ -47,7 +50,8 @@ def generator(count, bucket_idx, gen_args: GeneratorArgs):
     skewed_seed = random.getrandbits(gen_args.key_bits)
 
     skewed_gen = map(get_record, itertools.repeat(skewed_seed, skewed_count))
-    data_gen = map(get_record, (random.getrandbits(gen_args.key_bits) for _ in range(data_count)))
+    data_gen = map(get_record, (random.getrandbits(gen_args.key_bits) for _ in
+                                range(data_count)))
 
     while True:
         if skewed_count + data_count == 0:
@@ -66,18 +70,29 @@ def generator(count, bucket_idx, gen_args: GeneratorArgs):
             yield next(data_gen)
             data_count -= 1
 
-def generate(worker_id, bucket_count, gen_args):
-    command = ["avro-tools", "fromjson", "--schema-file", gen_args.schema_file, "-"]
 
-    H = [1. / (i ** gen_args.zipf_shape) for i in range(1, gen_args.num_buckets + 1)]
+def generate(worker_id, worker_share, gen_args):
+    command = ["avro-tools", "fromjson", "--schema-file", gen_args.schema_file,
+               "-"]
 
-    data = _partition_n_over_k(bucket_count, gen_args.num_buckets, H)
+    H = [1. / (i ** gen_args.zipf_shape) for i in
+         range(1, gen_args.num_buckets + 1)]
+
+    data = _partition_n_over_k(worker_share, gen_args.num_buckets, H)
+
+    gen_args.output_path.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(delete=False) as f:  # Atomic write
         with subprocess.Popen(command, stdin=subprocess.PIPE,
                               stdout=f) as process:
-            for i in sorted(range(gen_args.num_buckets), key=lambda x: random.random()):
+            for i in sorted(range(gen_args.num_buckets),
+                            key=lambda x: random.random()):
                 process.stdin.writelines(generator(data[i], i, gen_args))
-            os.replace(f.name, gen_args.output_path.joinpath("part{}-c{}-b{}-s{:.2f}.avro".format(worker_id, gen_args.count, gen_args.num_buckets, gen_args.zipf_shape)))
+        os.replace(f.name,
+                   gen_args.output_path.joinpath(
+                           f"part{worker_id}"
+                           f"-c{gen_args.input_count}"
+                           f"-b{gen_args.num_buckets}"
+                           f"-s{gen_args.zipf_shape:.2f}.avro"))
 
 
 def main():
@@ -85,15 +100,15 @@ def main():
     parser.add_argument('count', type=int,
                         help="Number of records to generate.")
     parser.add_argument('--schema-file', metavar='path/to/schema', type=Path,
-                        default=Path(__file__).parent.parent.joinpath("schema", "Record.avsc").resolve(),
+                        default=Path(__file__).resolve().parent.parent.joinpath(
+                            "schemas", "Record.avsc"),
                         help="Path to schema file. (default: %(default)s)")
     parser.add_argument('--dir', metavar='path/to/output', type=Path,
                         help="Save output to a directory. (default: this directory)",
                         default=Path('.').resolve())
     parser.add_argument('-k', '--key-bits', type=int,
-                       help="Size of join key in bits. (default: %(default)s)",
-                       default=20)
-
+                        help="Size of join key in bits. (default: %(default)s)",
+                        default=20)
 
     group = parser.add_argument_group('How to generate skewed data',
                                       description="You can specify the following arguments to create data that is artificially skewed through partitioning skew for a identity function partitioner. "
@@ -112,7 +127,7 @@ def main():
 
     args = parser.parse_args()
 
-    if args.key_size < 1:
+    if args.key_bits < 1:
         raise ValueError("Key size must be > 0.")
     if args.num_buckets < 1 or args.num_buckets & args.num_buckets - 1:
         raise ValueError("Number of buckets must be power of 2.")
@@ -121,12 +136,13 @@ def main():
     if args.zipf_shape < 0:
         raise ValueError("Zipf shape parameter must be > 0.")
 
-    gen_args = GeneratorArgs(args.count, args.schema_file, args.output_path,
+    gen_args = GeneratorArgs(args.count, args.schema_file, args.dir,
                              args.key_bits, args.num_buckets, args.zipf_shape,
                              args.data_skew)
 
     with ProcessPoolExecutor() as pool:
-        for worker_id, worker_share in enumerate(_partition_n_over_k(args.count, os.cpu_count())):
+        for worker_id, worker_share in enumerate(
+                _partition_n_over_k(args.count, os.cpu_count())):
             pool.submit(generate, worker_id, worker_share, gen_args)
 
 
