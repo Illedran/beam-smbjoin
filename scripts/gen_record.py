@@ -2,28 +2,30 @@ import argparse
 import itertools
 import os
 import random
-import subprocess
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass
 from pathlib import Path
 from typing import *
-
+from fastavro import parse_schema, writer
 import math
+from collections import namedtuple
+
+schema = parse_schema({
+    "type": "record",
+    "name": "Record",
+    "namespace": "smbjoin",
+    "fields": [
+        {
+            "name": "id",
+            "type": "string"
+        }
+    ]
+})
+
+GeneratorArgs = namedtuple('GeneratorArgs', ['input_count', 'schema_file', 'output_path', 'key_bits', 'num_buckets', 'zipf_shape', 'data_skew'])
 
 
-@dataclass(frozen=True)
-class GeneratorArgs:
-    input_count: int
-    schema_file: Path
-    output_path: Path
-    key_bits: int
-    num_buckets: int
-    zipf_shape: float
-    data_skew: float
-
-
-def _partition_n_over_k(n: int, k: int, weights: Iterable[float] = None) -> \
+def _partition_n_over_k(n: int, k: int, weights: Collection[float] = None) -> \
 List[int]:
     if weights is None:
         return [n // k + (i < n % k) for i in range(k)]
@@ -36,13 +38,12 @@ List[int]:
 
 
 def generator(count, bucket_idx, gen_args: GeneratorArgs):
-    record_template = b'{"id":"%0*x"}'
     max_key = 1 << gen_args.key_bits
     key_length = math.ceil(gen_args.key_bits / 4)
 
     def get_record(seed):
         key = (bucket_idx + gen_args.num_buckets * seed) % max_key
-        return record_template % (key_length, key)
+        return {"id": "%0*x" % (key_length, key)}
 
     skewed_count = int(count * gen_args.data_skew)
     data_count = count - skewed_count
@@ -51,7 +52,7 @@ def generator(count, bucket_idx, gen_args: GeneratorArgs):
 
     skewed_gen = map(get_record, itertools.repeat(skewed_seed, skewed_count))
     data_gen = map(get_record, (random.getrandbits(gen_args.key_bits) for _ in
-                                range(data_count)))
+                                itertools.repeat(None, data_count)))
 
     while True:
         if skewed_count + data_count == 0:
@@ -71,28 +72,23 @@ def generator(count, bucket_idx, gen_args: GeneratorArgs):
             data_count -= 1
 
 
-def generate(worker_id, worker_share, gen_args):
-    command = ["avro-tools", "fromjson", "--schema-file", gen_args.schema_file,
-               "-"]
-
+def generate(worker_id, worker_share, gen_args: GeneratorArgs):
     H = [1. / (i ** gen_args.zipf_shape) for i in
          range(1, gen_args.num_buckets + 1)]
 
     data = _partition_n_over_k(worker_share, gen_args.num_buckets, H)
 
     gen_args.output_path.mkdir(parents=True, exist_ok=True)
+
     with tempfile.NamedTemporaryFile(delete=False) as f:  # Atomic write
-        with subprocess.Popen(command, stdin=subprocess.PIPE,
-                              stdout=f) as process:
-            for i in sorted(range(gen_args.num_buckets),
-                            key=lambda x: random.random()):
-                process.stdin.writelines(generator(data[i], i, gen_args))
-        os.replace(f.name,
-                   gen_args.output_path.joinpath(
-                           f"part{worker_id}"
-                           f"-c{gen_args.input_count}"
-                           f"-b{gen_args.num_buckets}"
-                           f"-s{gen_args.zipf_shape:.2f}.avro"))
+        for i in sorted(range(gen_args.num_buckets),
+                        key=lambda x: random.random()):
+            writer(f, schema, generator(data[i], i, gen_args))
+
+        save_path = gen_args.output_path.joinpath(
+                "part{}-c{}-b{}-s{:.2f}.avro".format(worker_id, gen_args.input_count, gen_args.num_buckets, gen_args.zipf_shape))
+        os.replace(f.name, str(save_path))
+
 
 
 def main():
@@ -108,7 +104,7 @@ def main():
                         default=Path('.').resolve())
     parser.add_argument('-k', '--key-bits', type=int,
                         help="Size of join key in bits. (default: %(default)s)",
-                        default=20)
+                        default=31)
 
     group = parser.add_argument_group('How to generate skewed data',
                                       description="You can specify the following arguments to create data that is artificially skewed through partitioning skew for a identity function partitioner. "
@@ -144,7 +140,6 @@ def main():
         for worker_id, worker_share in enumerate(
                 _partition_n_over_k(args.count, os.cpu_count())):
             pool.submit(generate, worker_id, worker_share, gen_args)
-
 
 if __name__ == '__main__':
     main()
