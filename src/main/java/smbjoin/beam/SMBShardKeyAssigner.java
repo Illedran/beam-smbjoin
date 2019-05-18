@@ -100,15 +100,20 @@ public class SMBShardKeyAssigner {
                   new DoFn<
                       KV<Integer, KV<byte[], byte[]>>,
                       KV<KV<Integer, Integer>, KV<byte[], byte[]>>>() {
+                    private transient int shardId;
+
+                    @StartBundle
+                    public void startBundle() {
+                      this.shardId = ThreadLocalRandom.current().nextInt();
+                    }
+
                     @ProcessElement
                     public void processElement(
                         @Element KV<Integer, KV<byte[], byte[]>> value, ProcessContext c) {
                       int numBuckets = c.sideInput(numBucketsView());
                       int bucketId = Math.floorMod(value.getKey(), numBuckets);
-                      int shardId =
-                          ThreadLocalRandom.current()
-                              .nextInt(
-                                  c.sideInput(filesPerBucketMapView()).getOrDefault(bucketId, 1));
+                      int bucketShards = c.sideInput(filesPerBucketMapView()).getOrDefault(bucketId, 1);
+                      int shardId = Math.floorMod(this.shardId, bucketShards);
                       c.output(KV.of(KV.of(bucketId, shardId), value.getValue()));
                     }
                   })

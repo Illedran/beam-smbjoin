@@ -1,32 +1,25 @@
 import argparse
-import itertools
 import os
 import random
 import tempfile
+from collections import namedtuple
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import *
-from fastavro import parse_schema, writer
+
+import itertools
 import math
-from collections import namedtuple
+from fastavro import parse_schema, writer
+import json
 
-schema = parse_schema({
-    "type": "record",
-    "name": "Record",
-    "namespace": "smbjoin",
-    "fields": [
-        {
-            "name": "id",
-            "type": "string"
-        }
-    ]
-})
-
-GeneratorArgs = namedtuple('GeneratorArgs', ['input_count', 'schema_file', 'output_path', 'key_bits', 'num_buckets', 'zipf_shape', 'data_skew'])
+GeneratorArgs = namedtuple('GeneratorArgs',
+                           ['input_count', 'schema', 'output_path',
+                            'key_bits', 'num_buckets', 'zipf_shape',
+                            'data_skew'])
 
 
 def _partition_n_over_k(n: int, k: int, weights: Collection[float] = None) -> \
-List[int]:
+        List[int]:
     if weights is None:
         return [n // k + (i < n % k) for i in range(k)]
     else:
@@ -83,12 +76,14 @@ def generate(worker_id, worker_share, gen_args: GeneratorArgs):
     with tempfile.NamedTemporaryFile(delete=False) as f:  # Atomic write
         for i in sorted(range(gen_args.num_buckets),
                         key=lambda x: random.random()):
-            writer(f, schema, generator(data[i], i, gen_args))
+            writer(f, gen_args.schema, generator(data[i], i, gen_args), codec='deflate')
 
         save_path = gen_args.output_path.joinpath(
-                "part{}-c{}-b{}-s{:.2f}.avro".format(worker_id, gen_args.input_count, gen_args.num_buckets, gen_args.zipf_shape))
+                "part{}-c{}-b{}-s{:.2f}.avro".format(worker_id,
+                                                     gen_args.input_count,
+                                                     gen_args.num_buckets,
+                                                     gen_args.zipf_shape))
         os.replace(f.name, str(save_path))
-
 
 
 def main():
@@ -97,7 +92,7 @@ def main():
                         help="Number of records to generate.")
     parser.add_argument('--schema-file', metavar='path/to/schema', type=Path,
                         default=Path(__file__).resolve().parent.parent.joinpath(
-                            "schemas", "Record.avsc"),
+                                "schemas", "Record.avsc"),
                         help="Path to schema file. (default: %(default)s)")
     parser.add_argument('--dir', metavar='path/to/output', type=Path,
                         help="Save output to a directory. (default: this directory)",
@@ -132,14 +127,20 @@ def main():
     if args.zipf_shape < 0:
         raise ValueError("Zipf shape parameter must be > 0.")
 
-    gen_args = GeneratorArgs(args.count, args.schema_file, args.dir,
+    with open(args.schema_file) as f:
+        parsed_schema = parse_schema(json.load(f))
+
+    gen_args = GeneratorArgs(args.count, parsed_schema, args.dir,
                              args.key_bits, args.num_buckets, args.zipf_shape,
                              args.data_skew)
 
-    with ProcessPoolExecutor() as pool:
+    worker_count = os.cpu_count()
+    with ProcessPoolExecutor(worker_count) as pool:
         for worker_id, worker_share in enumerate(
-                _partition_n_over_k(args.count, os.cpu_count())):
+                _partition_n_over_k(args.count, worker_count)):
             pool.submit(generate, worker_id, worker_share, gen_args)
+    # generate(0, args.count, gen_args)
+
 
 if __name__ == '__main__':
     main()

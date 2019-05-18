@@ -68,17 +68,10 @@ object SMBJoinJob {
       )
     )
 
-    val joined = sc.wrap {
-      smbData.internal
-        .apply(SMBJoinType.innerJoin[Int, GenericRecord, GenericRecord])
-    }
+    smbData
+      .internal
+      .apply(SMBJoinType.innerJoin[Int, GenericRecord, GenericRecord])
 
-    val joinedNum = ScioMetrics.counter("joinedRecordsCount")
-    val increaseCounter = joined
-      .withName("Increment counter")
-      .map { r =>
-        joinedNum.inc(); r
-      }
 
     val result = sc.close()
   }
