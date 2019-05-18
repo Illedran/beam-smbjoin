@@ -72,14 +72,6 @@ object JoinJob {
 
     val joined = leftSCollection.join(rightSCollection)
 
-    val joinedNum = ScioMetrics.counter("joinedRecordsCount")
-
-    val increaseCounter = joined
-        .withName("Increment counter")
-      .map { r =>
-        joinedNum.inc(); r
-      }
-
     val result = sc.close()
   }
 }
