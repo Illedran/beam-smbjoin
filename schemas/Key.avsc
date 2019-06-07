@@ -1,10 +1,14 @@
 {
   "type": "record",
-  "name": "Record",
+  "name": "Key",
   "namespace": "smbjoin",
   "fields": [
     {
       "name": "id",
+      "type": "int"
+    },
+    {
+      "name": "key",
       "type": "string"
     }
   ]

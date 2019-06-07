@@ -12,7 +12,7 @@ import org.apache.beam.sdk.values.PCollectionView;
 /**
  * Given a PCollection<Long> which contains the size of serialized records, returns a
  * PCollection<Integer> containing a single integer for the number of buckets required to fit the
- * data.
+ * data.l
  */
 @AutoValue
 abstract class ComputeNumBuckets extends PTransform<PCollection<Long>, PCollectionView<Integer>> {
