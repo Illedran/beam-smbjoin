@@ -10,7 +10,8 @@ import org.apache.avro.file.DataFileStream
 import org.apache.avro.generic.{GenericDatumReader, GenericRecord}
 import org.apache.beam.sdk.io.FileSystems
 import org.apache.beam.sdk.options.PipelineOptionsFactory
-import smbjoin.BucketedSCollectionFunctions._
+import org.apache.beam.sdk.coders.{Coder => BCoder}
+import org.apache.beam.sdk.coders.BigEndianIntegerCoder
 
 /* Example:
 sbt "runMain smbjoin.SMBMakeBucketsJobBeam
@@ -38,6 +39,7 @@ object SMBMakeBucketsJob {
     }
 
     FileSystems.setDefaultPipelineOptions(PipelineOptionsFactory.create)
+
     val schema: Schema = if (schemaFilePath.isDefined) {
       val schemaResource =
         FileSystems.matchNewResource(schemaFilePath.get, false)
@@ -56,14 +58,16 @@ object SMBMakeBucketsJob {
 
     implicit val coderGenericRecord: Coder[GenericRecord] =
       Coder.avroGenericRecordCoder(schema)
+    implicit val coderInt: Coder[Int] =
+      Coder.beam(BigEndianIntegerCoder.of.asInstanceOf[BCoder[Int]])
+    // This coder maintains ordering of ints
 
     def joinKey(input: GenericRecord): Int = {
-      Integer.parseInt(input.get("id").toString, 16)
+      input.get("id").asInstanceOf[Int]
     }
 
     val partitioning: SMBPartitioning[Int, GenericRecord] =
-      AvroSMBUtils.getAvroSMBSimplePartitioning(schema, joinKey)
-
+      SMBUtils.getSMBPartitioning(joinKey)(coderInt, coderGenericRecord)
 
     sc.avroFile[GenericRecord](input, schema = schema)
       .internal
