@@ -4,6 +4,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.collect.Iterators;
 import com.google.common.collect.PeekingIterator;
+import com.google.common.math.IntMath;
 import com.google.common.primitives.UnsignedBytes;
 import java.io.IOException;
 import java.io.InputStream;
@@ -38,12 +39,14 @@ import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.ParDo;
 import org.apache.beam.sdk.transforms.Reshuffle;
 import org.apache.beam.sdk.transforms.SimpleFunction;
+import org.apache.beam.sdk.transforms.View;
 import org.apache.beam.sdk.transforms.join.CoGbkResult;
 import org.apache.beam.sdk.transforms.join.CoGroupByKey;
 import org.apache.beam.sdk.transforms.join.KeyedPCollectionTuple;
 import org.apache.beam.sdk.values.KV;
 import org.apache.beam.sdk.values.PBegin;
 import org.apache.beam.sdk.values.PCollection;
+import org.apache.beam.sdk.values.PCollectionView;
 import org.apache.beam.sdk.values.TupleTag;
 import smbjoin.SerializableSchema;
 
@@ -85,26 +88,22 @@ public class SMBAvroInput<K, L, R>
 
   @Override
   public PCollection<KV<K, KV<Iterable<L>, Iterable<R>>>> expand(final PBegin input) {
-    PCollection<KV<Void, SMBFileMetadata>> left = input.apply("Left: Create match", Create.of(leftSpec))
+    PCollectionView<List<SMBFileMetadata>> left = input.apply("Left: Create match", Create.of(leftSpec))
         .apply("Left: Match files", FileIO.matchAll())
         .apply("Left: Extract metadata", ParDo.of(new ExtractAvroMetadataFn<L>(leftSchema)))
-        .setCoder(KvCoder.of(VoidCoder.of(), SMBFileMetadata.coder()));
+        .setCoder(SMBFileMetadata.coder())
+        .apply(View.asList());
 
-    PCollection<KV<Void, SMBFileMetadata>> right =
+    PCollectionView<List<SMBFileMetadata>> right =
         input
             .apply("Right: Create match", Create.of(rightSpec))
             .apply("Right: Match files", FileIO.matchAll())
-        .apply("Right: Extract metadata", ParDo.of(new ExtractAvroMetadataFn<R>(rightSchema)))
-        .setCoder(KvCoder.of(VoidCoder.of(), SMBFileMetadata.coder()));
+            .apply("Right: Extract metadata", ParDo.of(new ExtractAvroMetadataFn<R>(rightSchema)))
+            .setCoder(SMBFileMetadata.coder())
+            .apply(View.asList());
 
-    final TupleTag<SMBFileMetadata> leftTag = new TupleTag<>();
-    final TupleTag<SMBFileMetadata> rightTag = new TupleTag<>();
-
-    return KeyedPCollectionTuple
-        .of(leftTag, left)
-        .and(rightTag, right)
-        .apply(CoGroupByKey.create())
-        .apply(FlatMapElements.via(new ResolveBucketing(leftTag, rightTag)))
+    return input.apply(Create.of(Collections.singletonList(0)))
+        .apply(ParDo.of(new ResolveBucketing(left, right)))
         .apply(Reshuffle.viaRandomKey())
         .apply(ParDo.of(new SortMergeJoinDoFn()))
         .setCoder(
@@ -115,7 +114,7 @@ public class SMBAvroInput<K, L, R>
                     IterableCoder.of(rightSMBPartitioning.getRecordCoder()))));
   }
 
-  private class ExtractAvroMetadataFn<T> extends DoFn<Metadata, KV<Void, SMBFileMetadata>> {
+  private class ExtractAvroMetadataFn<T> extends DoFn<Metadata, SMBFileMetadata> {
     private SerializableSchema serializableSchema;
     private DatumReader<T> reader;
 
@@ -145,67 +144,39 @@ public class SMBAvroInput<K, L, R>
 
     @ProcessElement
     public void processElement(@Element Metadata input, ProcessContext c) {
-      c.output(KV.of(null, getBucketingMetadata(input.resourceId(), reader)));
+      c.output(getBucketingMetadata(input.resourceId(), reader));
     }
   }
 
   private class ResolveBucketing
-      extends SimpleFunction<KV<Void, CoGbkResult>, Iterable<KV<ResourceId, ResourceId>>> {
+      extends DoFn<Integer, KV<ResourceId, ResourceId>> {
 
-    private TupleTag<SMBFileMetadata> leftTag;
-    private TupleTag<SMBFileMetadata> rightTag;
+    private PCollectionView<List<SMBFileMetadata>> leftShards;
+    private PCollectionView<List<SMBFileMetadata>> rightShards;
 
-    ResolveBucketing(TupleTag<SMBFileMetadata> leftTag, TupleTag<SMBFileMetadata> rightTag) {
-      this.leftTag = leftTag;
-      this.rightTag = rightTag;
+    ResolveBucketing(PCollectionView<List<SMBFileMetadata>> leftShards, PCollectionView<List<SMBFileMetadata>> rightShards) {
+      this.leftShards = leftShards;
+      this.rightShards = rightShards;
     }
 
-    @Override
-    public Iterable<KV<ResourceId, ResourceId>> apply(final KV<Void, CoGbkResult> input) {
-      Iterable<SMBFileMetadata> leftIt = input.getValue().getAll(leftTag);
-      Iterable<SMBFileMetadata> rightIt = input.getValue().getAll(rightTag);
+    @ProcessElement
+    public void processElement(@Element final Integer input, ProcessContext c) {
+      List<SMBFileMetadata> leftIt = c.sideInput(leftShards);
+      List<SMBFileMetadata> rightIt = c.sideInput(rightShards);
 
-      ArrayList<KV<ResourceId, ResourceId>> result = new ArrayList<>();
-
-      long leftBuckets = 0;
-      long rightBuckets = 0;
-      long leftShards = 0;
-      long rightShards = 0;
-      for (SMBFileMetadata left : leftIt) {
-        leftBuckets = Math.max(leftBuckets, left.bucketId() + 1);
-        leftShards++;
-      }
-      for (SMBFileMetadata right : rightIt) {
-        rightBuckets = Math.max(rightBuckets, right.bucketId() + 1);
-        rightShards++;
-      }
-
-      long numBuckets = Math.min(leftBuckets, rightBuckets);
-
-      System.out.println(
-          String.format(
-              "Found %d (%d, %d) buckets over (%d, %d) shards",
-              numBuckets, leftBuckets, rightBuckets, leftShards, rightShards));
-
-      // Bitwise magic
-      if ((leftBuckets & (leftBuckets - 1)) != 0) {
-        throw new RuntimeException("Number of buckets on the left should be a power of two.");
-      }
-
-      if ((rightBuckets & (rightBuckets - 1)) != 0) {
-        throw new RuntimeException("Number of buckets on the right should be a power of two.");
-      }
+      int gcf = IntMath.gcd(
+          leftIt.stream().mapToInt(SMBFileMetadata::bucketId).max().orElse(1),
+          rightIt.stream().mapToInt(SMBFileMetadata::bucketId).max().orElse(1)
+      );
 
       for (SMBFileMetadata left : leftIt) {
         for (SMBFileMetadata right : rightIt) {
-          if (Math.floorMod(left.bucketId(), numBuckets)
-              == Math.floorMod(right.bucketId(), numBuckets)) {
-            result.add(KV.of(left.resourceId(), right.resourceId()));
+          if (Math.floorMod(left.bucketId(), gcf)
+              == Math.floorMod(right.bucketId(), gcf)) {
+            c.output(KV.of(left.resourceId(), right.resourceId()));
           }
         }
       }
-
-      return result;
     }
   }
 
