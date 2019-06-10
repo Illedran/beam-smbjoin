@@ -3,9 +3,9 @@ package smbjoin
 import com.spotify.scio._
 import com.spotify.scio.coders.Coder
 import org.apache.beam.sdk.coders.{BigEndianIntegerCoder, Coder => BCoder}
-import smbjoin.beam.{SMBAvroInput, SMBJoinType}
 import org.apache.beam.sdk.io.FileSystems
 import org.apache.beam.sdk.options.PipelineOptionsFactory
+import smbjoin.beam.SMBAvroInput
 
 /*
 sbt "runMain example.SMBMakeBucketsExample
@@ -40,9 +40,6 @@ object SMBJoinJob {
       )
     )
 
-    smbData.internal
-      .apply(SMBJoinType.innerJoin[Int, Event, Key])
-
-    val result = sc.close()
+    sc.close()
   }
 }
