@@ -36,7 +36,7 @@ import org.apache.beam.sdk.values.PCollectionView;
 import smbjoin.SerializableSchema;
 
 public class SMBAvroInput<K, L, R>
-    extends PTransform<PBegin, PCollection<KV<K, KV<Iterable<L>, Iterable<R>>>>> {
+    extends PTransform<PBegin, PCollection<KV<K, KV<L, R>>>> {
 
   private final String leftSpec; // gs://.../users/2017-01-01/*.avro
   private final String rightSpec; // gs://.../streams/2017-01-01/*.avro
@@ -72,7 +72,7 @@ public class SMBAvroInput<K, L, R>
   }
 
   @Override
-  public PCollection<KV<K, KV<Iterable<L>, Iterable<R>>>> expand(final PBegin input) {
+  public PCollection<KV<K, KV<L, R>>> expand(final PBegin input) {
     PCollectionView<List<SMBFileMetadata>> left =
         input
             .apply("Left: Create match", Create.of(leftSpec))
@@ -99,7 +99,29 @@ public class SMBAvroInput<K, L, R>
                 leftSMBPartitioning.getJoinKeyCoder(),
                 KvCoder.of(
                     IterableCoder.of(leftSMBPartitioning.getRecordCoder()),
-                    IterableCoder.of(rightSMBPartitioning.getRecordCoder()))));
+                    IterableCoder.of(rightSMBPartitioning.getRecordCoder()))))
+        .apply(
+            ParDo.of(
+                new DoFn<KV<K, KV<Iterable<L>, Iterable<R>>>, KV<K, KV<L, R>>>() {
+                  @ProcessElement
+                  public void processElement(
+                      @Element KV<K, KV<Iterable<L>, Iterable<R>>> input, ProcessContext c) {
+                    K key = input.getKey();
+                    Iterable<L> leftGroup = input.getValue().getKey();
+                    Iterable<R> rightGroup = input.getValue().getValue();
+                    for (L left : leftGroup) {
+                      for (R right : rightGroup) {
+                        c.output(KV.of(key, KV.of(left, right)));
+                      }
+                    }
+                  }
+                })).setCoder(
+            KvCoder.of(
+                leftSMBPartitioning.getJoinKeyCoder(),
+                KvCoder.of(
+                    leftSMBPartitioning.getRecordCoder(),
+                    rightSMBPartitioning.getRecordCoder())));
+
   }
 
   private class ExtractAvroMetadataFn<T> extends DoFn<Metadata, SMBFileMetadata> {
