@@ -9,7 +9,7 @@ NUM_WORKERS=30
 EVENTS=6e9
 EVENT_KEYS=50e6
 KEY_SPACE=1e9
-ZIPF_SHAPES="0.00 0.10 0.20 0.30 0.40 0.50 0.60 0.70 0.80 0.90 1.00"
+ZIPF_SHAPES="1.10 1.20 1.30 1.40"
 
 FANOUT_FACTOR=4
 
@@ -34,12 +34,12 @@ gsutil cp $(realpath "${FILE_DIR}/../schemas/Key.avsc") "${SCHEMA_DIR}/"
 OUTPUT_DIR_KEYS="${DATA_BUCKET}/keys"
 
 echo "Compiling..." && cd ${FILE_DIR}/.. && sbt ";compile ;pack"
-echo "Cleaning up old data..." && gsutil -m rm -r ${DATA_BUCKET} || true
+#echo "Cleaning up old data..." && gsutil -m rm -r ${DATA_BUCKET} || true
 echo "Generating data..."
 time=$(date +%s)
 
-gsutil -m rm -r ${OUTPUT_DIR_KEYS} || true
-target/pack/bin/data-generator-key --jobName="datagenerator-key-$time-$( printf "%04x%04x" $RANDOM $RANDOM )" --keySpace=${KEY_SPACE} --output=${OUTPUT_DIR_KEYS} --fanoutFactor=${FANOUT_FACTOR} ${DATAFLOW_ARGS}
+#gsutil -m rm -r ${OUTPUT_DIR_KEYS} || true
+#target/pack/bin/data-generator-key --jobName="datagenerator-key-$time-$( printf "%04x%04x" $RANDOM $RANDOM )" --keySpace=${KEY_SPACE} --output=${OUTPUT_DIR_KEYS} --fanoutFactor=${FANOUT_FACTOR} ${DATAFLOW_ARGS}
 for s in ${ZIPF_SHAPES}; do
 
   sStr=${s/./}

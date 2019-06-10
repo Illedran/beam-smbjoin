@@ -25,14 +25,14 @@ object JoinJob {
 
     val events = sc
       .avroFile[Event](eventsInput)
-      .withName("Extract key left")
+      .withName("Extract join key from events")
       .map { r =>
         (r.getId, r)
       }
 
     val keys = sc
       .avroFile[Key](keysInput)
-      .withName("Extract key right")
+      .withName("Extract join key from keys")
       .map { r =>
         (r.getId, r)
       }

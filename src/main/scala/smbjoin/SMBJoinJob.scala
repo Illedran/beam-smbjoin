@@ -4,6 +4,8 @@ import com.spotify.scio._
 import com.spotify.scio.coders.Coder
 import org.apache.beam.sdk.coders.{BigEndianIntegerCoder, Coder => BCoder}
 import smbjoin.beam.{SMBAvroInput, SMBJoinType}
+import org.apache.beam.sdk.io.FileSystems
+import org.apache.beam.sdk.options.PipelineOptionsFactory
 
 /*
 sbt "runMain example.SMBMakeBucketsExample
@@ -15,8 +17,6 @@ sbt "runMain example.SMBMakeBucketsExample
 object SMBJoinJob {
 
   def main(cmdlineArgs: Array[String]): Unit = {
-    import org.apache.beam.sdk.io.FileSystems
-    import org.apache.beam.sdk.options.PipelineOptionsFactory
     val (sc, args) = ContextAndArgs(cmdlineArgs)
 
     val eventsInput = args("events")
