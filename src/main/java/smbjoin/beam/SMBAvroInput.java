@@ -91,7 +91,7 @@ public class SMBAvroInput<K, L, R>
 
     return input
         .apply(Create.of(Collections.singletonList(0)))
-        .apply(ParDo.of(new ResolveBucketing(left, right)))
+        .apply(ParDo.of(new ResolveBucketing(left, right)).withSideInputs(left, right))
         .apply(Reshuffle.viaRandomKey())
         .apply(ParDo.of(new SortMergeJoinDoFn()))
         .setCoder(
