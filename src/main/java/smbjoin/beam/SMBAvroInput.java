@@ -2,6 +2,7 @@ package smbjoin.beam;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.PeekingIterator;
 import com.google.common.math.IntMath;
@@ -266,7 +267,7 @@ public class SMBAvroInput<K, L, R>
             }
           }
           c.output(
-              KV.of(groupKey, KV.of(new ArrayList<>(leftBuffer), new ArrayList<>(rightBuffer))));
+              KV.of(groupKey, KV.of(ImmutableList.copyOf(leftBuffer), ImmutableList.copyOf(rightBuffer))));
         }
       }
     }
