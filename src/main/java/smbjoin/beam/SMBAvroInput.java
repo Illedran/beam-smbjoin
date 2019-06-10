@@ -8,46 +8,31 @@ import com.google.common.math.IntMath;
 import com.google.common.primitives.UnsignedBytes;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.Serializable;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 import org.apache.avro.file.DataFileStream;
-import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.beam.sdk.coders.IterableCoder;
 import org.apache.beam.sdk.coders.KvCoder;
-import org.apache.beam.sdk.coders.NullableCoder;
-import org.apache.beam.sdk.coders.VoidCoder;
 import org.apache.beam.sdk.io.FileIO;
 import org.apache.beam.sdk.io.FileSystems;
-import org.apache.beam.sdk.io.fs.MatchResult;
 import org.apache.beam.sdk.io.fs.MatchResult.Metadata;
 import org.apache.beam.sdk.io.fs.ResourceId;
-import org.apache.beam.sdk.schemas.transforms.CoGroup;
 import org.apache.beam.sdk.transforms.Create;
 import org.apache.beam.sdk.transforms.DoFn;
-import org.apache.beam.sdk.transforms.FlatMapElements;
-import org.apache.beam.sdk.transforms.MapElements;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.ParDo;
 import org.apache.beam.sdk.transforms.Reshuffle;
-import org.apache.beam.sdk.transforms.SimpleFunction;
 import org.apache.beam.sdk.transforms.View;
-import org.apache.beam.sdk.transforms.join.CoGbkResult;
-import org.apache.beam.sdk.transforms.join.CoGroupByKey;
-import org.apache.beam.sdk.transforms.join.KeyedPCollectionTuple;
 import org.apache.beam.sdk.values.KV;
 import org.apache.beam.sdk.values.PBegin;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PCollectionView;
-import org.apache.beam.sdk.values.TupleTag;
 import smbjoin.SerializableSchema;
 
 public class SMBAvroInput<K, L, R>
@@ -88,11 +73,13 @@ public class SMBAvroInput<K, L, R>
 
   @Override
   public PCollection<KV<K, KV<Iterable<L>, Iterable<R>>>> expand(final PBegin input) {
-    PCollectionView<List<SMBFileMetadata>> left = input.apply("Left: Create match", Create.of(leftSpec))
-        .apply("Left: Match files", FileIO.matchAll())
-        .apply("Left: Extract metadata", ParDo.of(new ExtractAvroMetadataFn<L>(leftSchema)))
-        .setCoder(SMBFileMetadata.coder())
-        .apply(View.asList());
+    PCollectionView<List<SMBFileMetadata>> left =
+        input
+            .apply("Left: Create match", Create.of(leftSpec))
+            .apply("Left: Match files", FileIO.matchAll())
+            .apply("Left: Extract metadata", ParDo.of(new ExtractAvroMetadataFn<L>(leftSchema)))
+            .setCoder(SMBFileMetadata.coder())
+            .apply(View.asList());
 
     PCollectionView<List<SMBFileMetadata>> right =
         input
@@ -102,7 +89,8 @@ public class SMBAvroInput<K, L, R>
             .setCoder(SMBFileMetadata.coder())
             .apply(View.asList());
 
-    return input.apply(Create.of(Collections.singletonList(0)))
+    return input
+        .apply(Create.of(Collections.singletonList(0)))
         .apply(ParDo.of(new ResolveBucketing(left, right)))
         .apply(Reshuffle.viaRandomKey())
         .apply(ParDo.of(new SortMergeJoinDoFn()))
@@ -118,17 +106,16 @@ public class SMBAvroInput<K, L, R>
     private SerializableSchema serializableSchema;
     private DatumReader<T> reader;
 
+    ExtractAvroMetadataFn(SerializableSchema serializableSchema) {
+      this.serializableSchema = serializableSchema;
+    }
+
     @Setup
     public void setup() {
       this.reader = new SpecificDatumReader<>(serializableSchema.schema());
     }
 
-    ExtractAvroMetadataFn(SerializableSchema serializableSchema) {
-      this.serializableSchema = serializableSchema;
-    }
-
-    private SMBFileMetadata getBucketingMetadata(
-        ResourceId resourceId, DatumReader<T> reader) {
+    private SMBFileMetadata getBucketingMetadata(ResourceId resourceId, DatumReader<T> reader) {
       checkNotNull(resourceId);
       try (ReadableByteChannel channel = FileSystems.open(resourceId);
           InputStream inputStream = Channels.newInputStream(channel);
@@ -148,13 +135,14 @@ public class SMBAvroInput<K, L, R>
     }
   }
 
-  private class ResolveBucketing
-      extends DoFn<Integer, KV<ResourceId, ResourceId>> {
+  private class ResolveBucketing extends DoFn<Integer, KV<ResourceId, ResourceId>> {
 
     private PCollectionView<List<SMBFileMetadata>> leftShards;
     private PCollectionView<List<SMBFileMetadata>> rightShards;
 
-    ResolveBucketing(PCollectionView<List<SMBFileMetadata>> leftShards, PCollectionView<List<SMBFileMetadata>> rightShards) {
+    ResolveBucketing(
+        PCollectionView<List<SMBFileMetadata>> leftShards,
+        PCollectionView<List<SMBFileMetadata>> rightShards) {
       this.leftShards = leftShards;
       this.rightShards = rightShards;
     }
@@ -164,15 +152,14 @@ public class SMBAvroInput<K, L, R>
       List<SMBFileMetadata> leftIt = c.sideInput(leftShards);
       List<SMBFileMetadata> rightIt = c.sideInput(rightShards);
 
-      int gcf = IntMath.gcd(
-          leftIt.stream().mapToInt(SMBFileMetadata::bucketId).max().orElse(1),
-          rightIt.stream().mapToInt(SMBFileMetadata::bucketId).max().orElse(1)
-      );
+      int gcf =
+          IntMath.gcd(
+              1 + leftIt.stream().mapToInt(SMBFileMetadata::bucketId).max().orElse(0),
+              1 + rightIt.stream().mapToInt(SMBFileMetadata::bucketId).max().orElse(0));
 
       for (SMBFileMetadata left : leftIt) {
         for (SMBFileMetadata right : rightIt) {
-          if (Math.floorMod(left.bucketId(), gcf)
-              == Math.floorMod(right.bucketId(), gcf)) {
+          if (Math.floorMod(left.bucketId(), gcf) == Math.floorMod(right.bucketId(), gcf)) {
             c.output(KV.of(left.resourceId(), right.resourceId()));
           }
         }
@@ -184,6 +171,8 @@ public class SMBAvroInput<K, L, R>
       extends DoFn<KV<ResourceId, ResourceId>, KV<K, KV<Iterable<L>, Iterable<R>>>> {
 
     private Comparator<byte[]> comparator = UnsignedBytes.lexicographicalComparator();
+    private SpecificDatumReader<L> leftReader;
+    private SpecificDatumReader<R> rightReader;
 
     private <T> K consumeIterator(
         PeekingIterator<T> iterator, ArrayList<T> buffer, SMBPartitioning<K, T> partitioning) {
@@ -205,9 +194,6 @@ public class SMBAvroInput<K, L, R>
       }
       return groupKey;
     }
-
-    private SpecificDatumReader<L> leftReader;
-    private SpecificDatumReader<R> rightReader;
 
     @Setup
     public void setup() {
