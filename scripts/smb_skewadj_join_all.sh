@@ -6,7 +6,7 @@ FILE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 # Configuration
 NUM_WORKERS=32
 
-ZIPF_SHAPES="1.10 1.20 1.30 1.40"
+ZIPF_SHAPES="0.00 0.10 0.20 0.30 0.40 0.50 0.60 0.70 0.80 0.90 1.00"
 
 # Vars
 GCS_BUCKET='gs://andrea_smb_test'
@@ -26,13 +26,13 @@ echo "Joining data..."
 time=$(date +%s)
 
 for i in ${ZIPF_SHAPES}; do
-  INPUT_KEYS="${DATA_BUCKET}/keys/*.avro"
-  INPUT_EVENTS="${DATA_BUCKET}/events/s$i/*.avro"
+  INPUT_KEYS_BUCKETED="${DATA_BUCKET}/bucketed_keys_skewadj/*.avro"
+  INPUT_EVENTS_BUCKETED="${DATA_BUCKET}/bucketed_events_skewadj/s$i/*.avro"
 
   sStr=${i/./}
   time=$(date +%s)
 
-  target/pack/bin/join-job --jobName="join-job-s$sStr-$time-$( printf "%04x%04x" $RANDOM $RANDOM )" --events=${INPUT_EVENTS} --keys=${INPUT_KEYS} ${DATAFLOW_ARGS}
+  target/pack/bin/smb-join-job --jobName="smb-join-job-skewadj-s$sStr-$time-$( printf "%04x%04x" $RANDOM $RANDOM )" --events=${INPUT_EVENTS_BUCKETED} --keys=${INPUT_KEYS_BUCKETED} ${DATAFLOW_ARGS}
 done;
 
 

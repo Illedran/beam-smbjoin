@@ -35,7 +35,7 @@ public class SMBShuffle<JoinKeyT, ValueT>
             "Extract joinKey and serialize",
             MapElements.via(new JoinKeySerializeFn(input.getCoder())))
         .apply(GroupByKey.create())
-        .apply(SortValuesBytes.create(BufferedExternalSorter.options().withMemoryMB(2047)))
+        .apply(SortValuesBytes.create(BufferedExternalSorter.options().withMemoryMB(1024)))
         .apply("Wrap in SMBFiles", MapElements.via(new WrapSMBFileFn()))
         .setCoder(SMBFile.coder());
   }
