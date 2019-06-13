@@ -24,12 +24,15 @@ public class Key extends org.apache.avro.specific.SpecificRecordBase
       new BinaryMessageEncoder<Key>(MODEL$, SCHEMA$);
   private static final BinaryMessageDecoder<Key> DECODER =
       new BinaryMessageDecoder<Key>(MODEL$, SCHEMA$);
+
   @SuppressWarnings("unchecked")
   private static final org.apache.avro.io.DatumWriter<Key> WRITER$ =
       (org.apache.avro.io.DatumWriter<Key>) MODEL$.createDatumWriter(SCHEMA$);
+
   @SuppressWarnings("unchecked")
   private static final org.apache.avro.io.DatumReader<Key> READER$ =
       (org.apache.avro.io.DatumReader<Key>) MODEL$.createDatumReader(SCHEMA$);
+
   @Deprecated public int id;
   @Deprecated public java.lang.CharSequence key;
 

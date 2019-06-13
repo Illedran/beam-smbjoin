@@ -6,9 +6,11 @@ Work done at Spotify for my thesis at KTH.
 ## How-to:
 
 1) Generate events with `DataGeneratorKey` and `DataGeneratorEvent`. 
-2) Create bucketed events with (e.g.) `SMBMakeBucketsJob`.
+2) Create bucketed events with (e.g.) `SMBMakeBucketsJob`. For skew-adjusted SMB, use
+`SMBMakeBucketsSkewAdjJob`.
 3) Repeat for keys.
 4) Join with `SMBJoinJob`.
+5) Compare with `JoinJob`.
 
 ## Features:
 

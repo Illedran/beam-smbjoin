@@ -88,7 +88,7 @@ public abstract class SMBSizeShuffle<JoinKeyT, ValueT>
             ResolveSkewnessSize.create(numBucketsView, bucketSizeMB(), recordOverhead()));
 
     return encoded
-        .apply(SMBShardKeyAssigner.random(filesPerBucketMapView))
+        .apply(SMBShardKeyAssigner.roundRobin(filesPerBucketMapView))
         .apply(GroupByKey.create())
         .apply(SortValuesBytes.create(BufferedExternalSorter.options().withMemoryMB(1024)))
         .apply("Wrap in SMBFiles", MapElements.via(new WrapSMBFileFn()))

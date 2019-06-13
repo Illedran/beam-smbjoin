@@ -24,12 +24,15 @@ public class Event extends org.apache.avro.specific.SpecificRecordBase
       new BinaryMessageEncoder<Event>(MODEL$, SCHEMA$);
   private static final BinaryMessageDecoder<Event> DECODER =
       new BinaryMessageDecoder<Event>(MODEL$, SCHEMA$);
+
   @SuppressWarnings("unchecked")
   private static final org.apache.avro.io.DatumWriter<Event> WRITER$ =
       (org.apache.avro.io.DatumWriter<Event>) MODEL$.createDatumWriter(SCHEMA$);
+
   @SuppressWarnings("unchecked")
   private static final org.apache.avro.io.DatumReader<Event> READER$ =
       (org.apache.avro.io.DatumReader<Event>) MODEL$.createDatumReader(SCHEMA$);
+
   @Deprecated public int id;
   @Deprecated public java.nio.ByteBuffer payload;
 

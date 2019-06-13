@@ -1,7 +1,9 @@
 package smbjoin.beam;
 
 import com.google.auto.value.AutoValue;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.PTransform;
@@ -18,59 +20,54 @@ public class SMBShardKeyAssigner {
     return Random.create(filesPerBucketMapView);
   }
 
-  //  public static RoundRobin roundRobin(
-  //      PCollectionView<List<Integer>> filesPerBucketMapView) {
-  //    return RoundRobin.create(filesPerBucketMapView);
-  //  }
-  //
-  //  @AutoValue
-  //  public abstract static class RoundRobin
-  //      extends PTransform<
-  //          PCollection<KV<Integer, KV<byte[], byte[]>>>,
-  //          PCollection<KV<KV<Integer, Integer>, KV<byte[], byte[]>>>> {
-  //
-  //    abstract PCollectionView<List<Integer>> filesPerBucketMapView();
-  //
-  //    public static RoundRobin create(PCollectionView<List<Integer>> filesPerBucketMapView) {
-  //      return new AutoValue_SMBShardKeyAssigner_RoundRobin(filesPerBucketMapView);
-  //    }
-  //
-  //
-  //    @Override
-  //    public PCollection<KV<KV<Integer, Integer>, KV<byte[], byte[]>>> expand(
-  //        PCollection<KV<Integer, KV<byte[], byte[]>>> input) {
-  //      return input.apply("RoundRobin shard assignment",
-  //          ParDo.of(
-  //                  new DoFn<
-  //                      KV<Integer, KV<byte[], byte[]>>,
-  //                      KV<KV<Integer, Integer>, KV<byte[], byte[]>>>() {
-  //                    private transient Map<Integer, Integer> shardIdMap;
-  //
-  //                    @Setup
-  //                    public void setup() {
-  //                      shardIdMap = new HashMap<>();
-  //                    }
-  //
-  //                    @ProcessElement
-  //                    public void processElement(
-  //                        @Element KV<Integer, KV<byte[], byte[]>> value, ProcessContext c) {
-  //                      Map<Integer, Integer> shardsPerBucket =
-  // c.sideInput(filesPerBucketMapView());
-  //                      int numBuckets = shardsPerBucket.size();
-  //                      int bucketId = Math.floorMod(value.getKey(), numBuckets);
-  //
-  //                      int shardId = shardIdMap.getOrDefault(bucketId, 0);
-  //                      shardIdMap.put(
-  //                          bucketId,
-  //                          Math.floorMod(
-  //                              shardId + 1,
-  //                             shardsPerBucket.get(bucketId)));
-  //                      c.output(KV.of(KV.of(bucketId, shardId), value.getValue()));
-  //                    }
-  //                  })
-  //              .withSideInputs(filesPerBucketMapView()));
-  //    }
-  //  }
+  public static RoundRobin roundRobin(PCollectionView<List<Integer>> filesPerBucketMapView) {
+    return RoundRobin.create(filesPerBucketMapView);
+  }
+
+  @AutoValue
+  public abstract static class RoundRobin
+      extends PTransform<
+          PCollection<KV<Integer, KV<byte[], byte[]>>>,
+          PCollection<KV<KV<Integer, Integer>, KV<byte[], byte[]>>>> {
+
+    public static RoundRobin create(PCollectionView<List<Integer>> filesPerBucketMapView) {
+      return new AutoValue_SMBShardKeyAssigner_RoundRobin(filesPerBucketMapView);
+    }
+
+    abstract PCollectionView<List<Integer>> filesPerBucketMapView();
+
+    @Override
+    public PCollection<KV<KV<Integer, Integer>, KV<byte[], byte[]>>> expand(
+        PCollection<KV<Integer, KV<byte[], byte[]>>> input) {
+      return input.apply(
+          "RoundRobin shard assignment",
+          ParDo.of(
+                  new DoFn<
+                      KV<Integer, KV<byte[], byte[]>>,
+                      KV<KV<Integer, Integer>, KV<byte[], byte[]>>>() {
+                    private transient Map<Integer, Integer> shardIdMap;
+
+                    @Setup
+                    public void setup() {
+                      shardIdMap = new HashMap<>();
+                    }
+
+                    @ProcessElement
+                    public void processElement(
+                        @Element KV<Integer, KV<byte[], byte[]>> value, ProcessContext c) {
+                      List<Integer> shardsPerBucket = c.sideInput(filesPerBucketMapView());
+                      int numBuckets = shardsPerBucket.size();
+                      int bucketId = Math.floorMod(value.getKey(), numBuckets);
+
+                      int shardId = shardIdMap.getOrDefault(bucketId, 0);
+                      shardIdMap.put(
+                          bucketId, Math.floorMod(shardId + 1, shardsPerBucket.get(bucketId)));
+                      c.output(KV.of(KV.of(bucketId, shardId), value.getValue()));
+                    }
+                  })
+              .withSideInputs(filesPerBucketMapView()));
+    }
+  }
 
   @AutoValue
   public abstract static class Random
