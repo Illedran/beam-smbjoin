@@ -2,7 +2,6 @@ package smbjoin
 
 import com.spotify.scio._
 import com.spotify.scio.avro._
-
 import org.apache.beam.sdk.io.FileSystems
 import org.apache.beam.sdk.options.PipelineOptionsFactory
 

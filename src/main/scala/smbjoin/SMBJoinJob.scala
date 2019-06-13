@@ -7,13 +7,6 @@ import org.apache.beam.sdk.io.FileSystems
 import org.apache.beam.sdk.options.PipelineOptionsFactory
 import smbjoin.beam.SMBAvroInput
 
-/*
-sbt "runMain example.SMBMakeBucketsExample
-  --project=[PROJECT] --runner=DataflowRunner --zone=[ZONE]
-  --input=gs://dataflow-samples/shakespeare/kinglear.txt
-  --output=gs://[BUCKET]/[PATH]/wordcount"
- */
-
 object SMBJoinJob {
 
   def main(cmdlineArgs: Array[String]): Unit = {

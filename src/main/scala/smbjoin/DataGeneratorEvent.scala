@@ -9,14 +9,6 @@ import org.apache.beam.sdk.io.FileSystems
 import org.apache.beam.sdk.options.PipelineOptionsFactory
 import org.apache.beam.sdk.transforms.Reshuffle
 
-/* Example:
-sbt "runMain smbjoin.SMBMakeBucketsJobBeam
-  --input=data/events-1000000-0.avro
-  --schemaFile=schema/Event.avsc
-  --output=bucketed/events-100000-0
-  --numBuckets=20
- */
-
 object DataGeneratorEvent {
 
   def main(cmdlineArgs: Array[String]): Unit = {

@@ -8,18 +8,9 @@ import com.spotify.scio.coders.Coder
 import org.apache.avro.Schema
 import org.apache.avro.file.DataFileStream
 import org.apache.avro.generic.{GenericDatumReader, GenericRecord}
+import org.apache.beam.sdk.coders.{BigEndianIntegerCoder, Coder => BCoder}
 import org.apache.beam.sdk.io.FileSystems
 import org.apache.beam.sdk.options.PipelineOptionsFactory
-import org.apache.beam.sdk.coders.{Coder => BCoder}
-import org.apache.beam.sdk.coders.BigEndianIntegerCoder
-
-/* Example:
-sbt "runMain smbjoin.SMBMakeBucketsJobBeam
-  --input=data/events-1000000-0.avro
-  --schemaFile=schema/Event.avsc
-  --output=bucketed/events-100000-0
-  --numBuckets=20
- */
 
 object SMBMakeBucketsJob {
 

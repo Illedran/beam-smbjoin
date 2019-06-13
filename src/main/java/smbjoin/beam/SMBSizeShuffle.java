@@ -2,17 +2,14 @@ package smbjoin.beam;
 
 import com.google.auto.value.AutoValue;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.apache.beam.sdk.coders.Coder;
 import org.apache.beam.sdk.coders.CoderException;
 import org.apache.beam.sdk.extensions.sorter.BufferedExternalSorter;
-import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.GroupByKey;
 import org.apache.beam.sdk.transforms.MapElements;
 import org.apache.beam.sdk.transforms.PTransform;
-import org.apache.beam.sdk.transforms.ParDo;
 import org.apache.beam.sdk.transforms.SimpleFunction;
 import org.apache.beam.sdk.util.CoderUtils;
 import org.apache.beam.sdk.values.KV;
@@ -86,8 +83,9 @@ public abstract class SMBSizeShuffle<JoinKeyT, ValueT>
 
     // Compute shards per bucket
     final PCollectionView<List<Integer>> filesPerBucketMapView =
-        encoded
-            .apply("Compute shards per bucket", ResolveSkewnessSize.create(numBucketsView, bucketSizeMB(), recordOverhead()));
+        encoded.apply(
+            "Compute shards per bucket",
+            ResolveSkewnessSize.create(numBucketsView, bucketSizeMB(), recordOverhead()));
 
     return encoded
         .apply(SMBShardKeyAssigner.random(filesPerBucketMapView))

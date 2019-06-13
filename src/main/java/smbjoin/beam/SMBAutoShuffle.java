@@ -12,7 +12,6 @@ import org.apache.beam.sdk.transforms.MapElements;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.ParDo;
 import org.apache.beam.sdk.transforms.SimpleFunction;
-import org.apache.beam.sdk.transforms.Sum;
 import org.apache.beam.sdk.transforms.View;
 import org.apache.beam.sdk.util.CoderUtils;
 import org.apache.beam.sdk.values.KV;
@@ -22,13 +21,14 @@ import org.apache.beam.sdk.values.PCollectionView;
 import org.apache.beam.sdk.values.TupleTag;
 import org.apache.beam.sdk.values.TupleTagList;
 
+// Another approach to bucket sharding
 public class SMBAutoShuffle<JoinKeyT, ValueT>
     extends PTransform<PCollection<ValueT>, PCollection<SMBFile>> {
 
   private final int BUCKET_SIZE_MB = 256;
+  private final TupleTag<Long> recordSizesOutput = new TupleTag<Long>() {};
   private SMBPartitioning<JoinKeyT, ValueT> smbPartitioning;
   private TupleTag<KV<Integer, KV<byte[], byte[]>>> withJoinKeyOutput;
-  private final TupleTag<Long> recordSizesOutput = new TupleTag<Long>(){};
   private TupleTag<Integer> hashedBucketKeys;
   private PCollectionView<Integer> numBucketsView;
   private PCollectionView<Map<Integer, Integer>> filesPerBucketMapView;
@@ -56,9 +56,7 @@ public class SMBAutoShuffle<JoinKeyT, ValueT>
                 .withOutputTags(
                     withJoinKeyOutput, TupleTagList.of(recordSizesOutput).and(hashedBucketKeys)));
 
-    numBucketsView =
-        res1.get(recordSizesOutput)
-            .apply(ComputeNumBuckets.of(BUCKET_SIZE_MB));
+    numBucketsView = res1.get(recordSizesOutput).apply(ComputeNumBuckets.of(BUCKET_SIZE_MB));
 
     filesPerBucketMapView =
         res1.get(hashedBucketKeys)

@@ -1,9 +1,9 @@
 package smbjoin
 
+import java.util.UUID.randomUUID
+
 import com.spotify.scio._
 import com.spotify.scio.avro._
-
-import java.util.UUID.randomUUID
 import org.apache.beam.sdk.io.FileSystems
 import org.apache.beam.sdk.options.PipelineOptionsFactory
 

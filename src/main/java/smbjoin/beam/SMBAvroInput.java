@@ -36,8 +36,7 @@ import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PCollectionView;
 import smbjoin.SerializableSchema;
 
-public class SMBAvroInput<K, L, R>
-    extends PTransform<PBegin, PCollection<KV<K, KV<L, R>>>> {
+public class SMBAvroInput<K, L, R> extends PTransform<PBegin, PCollection<KV<K, KV<L, R>>>> {
 
   private final String leftSpec; // gs://.../users/2017-01-01/*.avro
   private final String rightSpec; // gs://.../streams/2017-01-01/*.avro
@@ -101,7 +100,8 @@ public class SMBAvroInput<K, L, R>
                 KvCoder.of(
                     IterableCoder.of(leftSMBPartitioning.getRecordCoder()),
                     IterableCoder.of(rightSMBPartitioning.getRecordCoder()))))
-        .apply("Inner join",
+        .apply(
+            "Inner join",
             ParDo.of(
                 new DoFn<KV<K, KV<Iterable<L>, Iterable<R>>>, KV<K, KV<L, R>>>() {
                   @ProcessElement
@@ -116,13 +116,12 @@ public class SMBAvroInput<K, L, R>
                       }
                     }
                   }
-                })).setCoder(
+                }))
+        .setCoder(
             KvCoder.of(
                 leftSMBPartitioning.getJoinKeyCoder(),
                 KvCoder.of(
-                    leftSMBPartitioning.getRecordCoder(),
-                    rightSMBPartitioning.getRecordCoder())));
-
+                    leftSMBPartitioning.getRecordCoder(), rightSMBPartitioning.getRecordCoder())));
   }
 
   private class ExtractAvroMetadataFn<T> extends DoFn<Metadata, SMBFileMetadata> {
@@ -267,7 +266,9 @@ public class SMBAvroInput<K, L, R>
             }
           }
           c.output(
-              KV.of(groupKey, KV.of(ImmutableList.copyOf(leftBuffer), ImmutableList.copyOf(rightBuffer))));
+              KV.of(
+                  groupKey,
+                  KV.of(ImmutableList.copyOf(leftBuffer), ImmutableList.copyOf(rightBuffer))));
         }
       }
     }
