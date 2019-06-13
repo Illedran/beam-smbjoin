@@ -1,16 +1,19 @@
 from matplotlib import pyplot as plt
+import numpy as np
 
-B = 64
-r = range(1, B+1)
-n = 120e6
+B = int(50e6)
+r = np.arange(B)+1
+n = 6e9
+cutoff=int(1e6)
 
-for s in [0, 0.25, 0.6, 1.1]:
-    H = [1./(i**s) for i in r]
-    H_sum = sum(H)
-    data = [n * H[i-1]/H_sum for i in r]
-    plt.loglog(r, data, label=f'{s:.2f}', marker='o', markersize=4, linewidth=0.5)
+for s in np.linspace(0,1.4,8):
+    H = 1./(r**s)
+    H_sum = H.sum()
+    data = n * H/H_sum
+    plt.loglog(r[:cutoff], data[:cutoff], label=f'{s:.2f}', linewidth=1)
+    print(list(map(int,data[:8])))
 
-plt.xlabel('Bucket rank')
-plt.ylabel("Bucket size")
+plt.xlabel('Rank in key frequency table')
+plt.ylabel("Key frequency")
 plt.legend()
 plt.show()

@@ -6,7 +6,7 @@ FILE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 # Configuration
 NUM_WORKERS=32
 
-ZIPF_SHAPES="0.00 0.10 0.20 0.30 0.40 0.50 0.60 0.70 0.80 0.90 1.00"
+ZIPF_SHAPES="1.40"
 
 # Vars
 GCS_BUCKET='gs://andrea_smb_test'
