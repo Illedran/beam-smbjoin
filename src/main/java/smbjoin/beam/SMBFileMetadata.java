@@ -39,11 +39,11 @@ public abstract class SMBFileMetadata {
   }
 
 
-  abstract ResourceId resourceId();
+  public abstract ResourceId resourceId();
 
-  abstract int bucketId();
+  public abstract int bucketId();
 
-  abstract int shardId();
+  public abstract int shardId();
 
   public static SMBFileMetadata create(ResourceId resourceId, int bucketId, int shardId) {
     return new AutoValue_SMBFileMetadata(resourceId, bucketId, shardId);

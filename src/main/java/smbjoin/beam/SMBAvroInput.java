@@ -80,7 +80,7 @@ public class SMBAvroInput<K, L, R>
             .apply("Left: Match files", FileIO.matchAll())
             .apply("Left: Extract metadata", ParDo.of(new ExtractAvroMetadataFn<L>(leftSchema)))
             .setCoder(SMBFileMetadata.coder())
-            .apply(View.asList());
+            .apply("Left buckets", View.asList());
 
     PCollectionView<List<SMBFileMetadata>> right =
         input
@@ -88,7 +88,7 @@ public class SMBAvroInput<K, L, R>
             .apply("Right: Match files", FileIO.matchAll())
             .apply("Right: Extract metadata", ParDo.of(new ExtractAvroMetadataFn<R>(rightSchema)))
             .setCoder(SMBFileMetadata.coder())
-            .apply(View.asList());
+            .apply("Right buckets", View.asList());
 
     return input
         .apply(Create.of(Collections.singletonList(0)))
@@ -101,7 +101,7 @@ public class SMBAvroInput<K, L, R>
                 KvCoder.of(
                     IterableCoder.of(leftSMBPartitioning.getRecordCoder()),
                     IterableCoder.of(rightSMBPartitioning.getRecordCoder()))))
-        .apply(
+        .apply("Inner join",
             ParDo.of(
                 new DoFn<KV<K, KV<Iterable<L>, Iterable<R>>>, KV<K, KV<L, R>>>() {
                   @ProcessElement

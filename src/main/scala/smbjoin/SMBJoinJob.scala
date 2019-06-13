@@ -36,7 +36,7 @@ object SMBJoinJob {
         Event.getClassSchema,
         Key.getClassSchema,
         SMBUtils.getSMBPartitioning[Int, Event](_.getId),
-        SMBUtils.getSMBPartitioning[Int, Key](_.getId),
+        SMBUtils.getSMBPartitioning[Int, Key](_.getId)
       )
     )
 
